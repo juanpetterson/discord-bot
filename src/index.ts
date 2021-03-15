@@ -19,12 +19,8 @@ client.on('message', async msg => {
   }
 });
 
-// client.login('token');
-
 const getNewJoke = async (): Promise<string> =>  {
     const {data} = await axios.get('https://api.chucknorris.io/jokes/random');
-
-    console.log(data.value)
 
     return data.value
 }
