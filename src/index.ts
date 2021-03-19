@@ -2,10 +2,7 @@ require('dotenv').config();
 
 import Discord from'discord.js';
 import axios from'axios';
-import ytdl from'ytdl-core';
-import PlayAudioCommand from './play-audio';
 import fs from 'fs';
-import path from 'path';
 
 
 const client = new Discord.Client();
