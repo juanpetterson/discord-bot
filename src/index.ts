@@ -37,8 +37,8 @@ client.on('message', async message => {
 
         // When no packets left to send, leave the channel.
         setTimeout(() => {
-        connection.channel.leave();
-        }, 4000);
+          message.member?.voice.channel?.leave();
+        }, 6000);
       })
     .catch(console.error);
       return;
@@ -143,10 +143,9 @@ const executeVoice = (message: Discord.Message) => {
       connection.play(fs.createReadStream(filePath));
 
       setTimeout(() => {
-        connection.channel.leave();
+        message.member?.voice.channel?.leave();
 
         return true;
-
       }, 3000);
     });
 }
