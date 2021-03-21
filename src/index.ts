@@ -29,16 +29,13 @@ client.on('message', async message => {
         setTimeout(() => {
           const filePath = './src/assets/audios/cala-bacon-fera.mp3';
 
-          const hasFile = fs.existsSync(filePath);
-          console.log(hasFile)
-
           connection.play(fs.createReadStream(filePath));
         }, 2000);
 
         // When no packets left to send, leave the channel.
         setTimeout(() => {
           message.member?.voice.channel?.leave();
-        }, 6000);
+        }, 8000);
       })
     .catch(console.error);
       return;
