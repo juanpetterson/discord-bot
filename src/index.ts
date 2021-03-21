@@ -26,22 +26,27 @@ client.on('message', async message => {
       console.log('joined channel');
 
       setTimeout(() => {
-        const filePath = __dirname +'\\assets\\cala-bacon-fera.mp3';
-        connection.play(fs.createReadStream(filePath))
-
+        const filePath = '..\\assets\\cala-bacon-fera.mp3';
+        connection.play(fs.createReadStream(filePath), {volume: 1.0});
       }, 2000);
 
       // When no packets left to send, leave the channel.
-
       setTimeout(() => {
-      // connection.channel.leave();
-      message.member?.voice.channel?.leave();
-
-    }, 4000);
-  })
+      connection.channel.leave();
+      }, 4000);
+    })
   .catch(console.error);
     return;
 
+  }
+
+  if(message.content.toLowerCase().startsWith('!falar')) {
+
+    const args = message.content.split(' ')
+    args.shift();
+
+    await getTextAsVoice(args.join(''));
+    await executeVoice(message);
   }
 
   if(message.content.toLowerCase().startsWith('!speech')) {
@@ -49,21 +54,8 @@ client.on('message', async message => {
     const args = message.content.split(' ')
     args.shift();
 
-    getTextAsVoice(args.join(''));
-
-    setTimeout(() => {
-      const filePath = __dirname +'\\speech.mp3';
-      console.log(filePath);
-      message.member?.voice.channel?.join().then(connection =>
-      connection.play(fs.createReadStream(filePath)))
-
-    }, 5000);
-
-    setTimeout(() => {
-      // connection.channel.leave();
-      message.member?.voice.channel?.leave();
-
-    }, 8000);
+    await getTextAsVoice(args.join(''), 'en');
+    await executeVoice(message);
   }
 });
 
@@ -73,14 +65,26 @@ const getNewJoke = async (): Promise<string> =>  {
     return data.value
 }
 
-const getTextAsVoice = async (text: string) => {
-  const speech = new gtts(text, 'pt-br');
+const executeVoice = (message: Discord.Message) => {
+    const filePath = 'speech.mp3';
+    message.member?.voice.channel?.join().then(connection => {
+      connection.play(fs.createReadStream(filePath));
 
-  speech.save("./src/speech.mp3", (response: any) => {
-    // res.download('outpout.mp3')
+      setTimeout(() => {
+        connection.channel.leave();
+
+        return true;
+
+      }, 3000);
+    });
+}
+
+const getTextAsVoice = async (text: string, language = 'pt-br') => {
+  const speech = new gtts(text, language);
+
+  await speech.save("speech.mp3", (response: any) => {
     console.log(response)
 
+    return true;
   })
-
-  // console.log(response)
 }
