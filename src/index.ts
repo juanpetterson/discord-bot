@@ -24,8 +24,6 @@ client.on('message', async message => {
     if (message.content.toLowerCase() === '!calabacon'.toLowerCase()) {
       message.member?.voice.channel?.join()
       .then(connection => {
-        console.log('joined channel');
-
         setTimeout(() => {
           const filePath = './src/assets/audios/cala-bacon-fera.mp3';
 
