@@ -35,7 +35,7 @@ client.on('message', async message => {
         // When no packets left to send, leave the channel.
         setTimeout(() => {
           message.member?.voice.channel?.leave();
-        }, 8000);
+        }, 4000);
       })
     .catch(console.error);
       return;
