@@ -43,10 +43,6 @@ client.on('message', async message => {
     }
 
     if(message.content === '!fg') {
-
-      const args = message.content.split(' ')
-      args.shift();
-
       await getTextAsVoice('para de putaria');
       executeVoice(message);
     }
