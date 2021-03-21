@@ -45,9 +45,8 @@ client.on('message', async message => {
       executeVoice(message);
     }
 
-    if(message.content.toLowerCase().startsWith('!falar')) {
-      const args = message.content.split(' ')
-      args.shift();
+    if(message.content.toLowerCase().startsWith('$')) {
+      const args = message.content.replace('$', ' ')
 
       let language = 'pt-br';
 
@@ -60,7 +59,7 @@ client.on('message', async message => {
       }
 
 
-      await getTextAsVoice(args.join(''), language);
+      await getTextAsVoice(args, language);
       executeVoice(message);
     }
 
