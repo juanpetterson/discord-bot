@@ -27,13 +27,12 @@ client.on('message', async message => {
         setTimeout(() => {
           const filePath = './src/assets/audios/cala-bacon-fera.mp3';
 
-          connection.play(fs.createReadStream(filePath));
+          connection.play(fs.createReadStream(filePath)).on('finish', () => {
+            setTimeout(() => {
+              message.member?.voice.channel?.leave();
+            }, 500);
+          });
         }, 2000);
-
-        // When no packets left to send, leave the channel.
-        setTimeout(() => {
-          message.member?.voice.channel?.leave();
-        }, 4000);
       })
     .catch(console.error);
       return;
@@ -139,13 +138,11 @@ const getNewJoke = async (): Promise<string> =>  {
 const executeVoice = (message: Discord.Message) => {
     const filePath = './src/assets/audios/speech.mp3';
     message.member?.voice.channel?.join().then(connection => {
-      connection.play(fs.createReadStream(filePath));
-
-      setTimeout(() => {
-        message.member?.voice.channel?.leave();
-
-        return true;
-      }, 3000);
+      connection.play(fs.createReadStream(filePath)).on('finish', () => {
+        setTimeout(() => {
+          message.member?.voice.channel?.leave();
+        }, 500);
+      });
     });
 }
 
