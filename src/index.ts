@@ -1,74 +1,90 @@
-require('dotenv').config();
+require('dotenv').config()
 
-import Discord from'discord.js';
-import axios from'axios';
-import fs from 'fs';
-const gtts = require('gtts');
+import Discord, { Client, Intents } from 'discord.js'
+import axios from 'axios'
+import fs from 'fs'
+const gtts = require('gtts')
+import {
+  VoiceConnectionStatus,
+  generateDependencyReport,
+  joinVoiceChannel,
+  createAudioPlayer,
+  NoSubscriberBehavior,
+  createAudioResource,
+  AudioPlayerStatus,
+} from '@discordjs/voice'
 
-const client = new Discord.Client();
+console.log(generateDependencyReport())
 
-client.login(process.env.DISCORD_TOKEN);
+const client = new Client({
+  intents: [
+    Intents.FLAGS.GUILDS,
+    Intents.FLAGS.GUILD_MESSAGES,
+    Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
+    Intents.FLAGS.GUILD_VOICE_STATES,
+  ],
+})
+// const client = new Discord.Client()
 
-client.on('ready', () => {
-  console.log(`Logged in as ${client?.user?.tag}!`);
-});
+client.once('clientReady', (c: any) => {
+  console.log(`Ready! Logged in as ${c.user.tag}`)
+})
 
-client.on('message', async message => {
+client.on('messageCreate', async (message: any) => {
+  console.log('message received')
   try {
     if (message.content.toLowerCase() === '!joke'.toLowerCase()) {
-      const joke = await getNewJoke();
+      const joke = await getNewJoke()
 
-      message.reply(joke);
+      message.reply(joke)
     }
 
-    if (message.content.toLowerCase() === '!calabacon'.toLowerCase()) {
-      message.member?.voice.channel?.join()
-      .then(connection => {
-        setTimeout(() => {
-          const filePath = './src/assets/audios/cala-bacon-fera.mp3';
+    // if (message.content.toLowerCase() === '!calabacon'.toLowerCase()) {
+    //   message.member?.voice.channel
+    //     ?.join()
+    //     .then((connection) => {
+    //       setTimeout(() => {
+    //         const filePath = './src/assets/audios/cala-bacon-fera.mp3'
 
-          connection.play(fs.createReadStream(filePath)).on('finish', () => {
-            setTimeout(() => {
-              message.member?.voice.channel?.leave();
-            }, 500);
-          });
-        }, 2000);
-      })
-    .catch(console.error);
-      return;
+    //         connection.play(fs.createReadStream(filePath)).on('finish', () => {
+    //           setTimeout(() => {
+    //             message.member?.voice.channel?.leave()
+    //           }, 500)
+    //         })
+    //       }, 2000)
+    //     })
+    //     .catch(console.error)
+    //   return
+    // }
 
+    if (message.content === '!fg') {
+      await getTextAsVoice('para de putaria')
+      executeVoice(message)
     }
 
-    if(message.content === '!fg') {
-      await getTextAsVoice('para de putaria');
-      executeVoice(message);
-    }
-
-    if(message.content.toLowerCase().startsWith('$')) {
+    if (message.content.toLowerCase().startsWith('$')) {
       const args = message.content.split(' ')
 
-      let language = 'pt-br';
+      let language = 'pt-br'
 
-      const lastArg = args[args.length -1];
+      const lastArg = args[args.length - 1]
       const hasLanguageParam = lastArg.startsWith('<') && lastArg.endsWith('>')
 
-      if (hasLanguageParam ) {
-        language = lastArg.replace('<', '').replace('>', '');
-        args.pop();
+      if (hasLanguageParam) {
+        language = lastArg.replace('<', '').replace('>', '')
+        args.pop()
       }
 
-
-      await getTextAsVoice(args.join('').replace('$', ''), language);
-      executeVoice(message);
+      await getTextAsVoice(args.join('').replace('$', ''), language)
+      executeVoice(message)
     }
 
-    if(message.content.toLowerCase().startsWith('!speech')) {
-
+    if (message.content.toLowerCase().startsWith('!speech')) {
       const args = message.content.split(' ')
-      args.shift();
+      args.shift()
 
-      await getTextAsVoice(args.join(''), 'en');
-      executeVoice(message);
+      await getTextAsVoice(args.join(''), 'en')
+      executeVoice(message)
     }
   } catch (error) {
     console.log(error)
@@ -125,33 +141,104 @@ client.on('message', async message => {
     'th' : 'Thai'
     'tr' : 'Turkish'
     'vi' : 'Vietnamese'
-    'cy' : 'Welsh'`);
+    'cy' : 'Welsh'`)
   }
-});
+})
 
-const getNewJoke = async (): Promise<string> =>  {
-    const {data} = await axios.get('https://api.chucknorris.io/jokes/random');
+const getNewJoke = async (): Promise<string> => {
+  const { data } = await axios.get('https://api.chucknorris.io/jokes/random')
 
-    return data.value
+  return data.value
 }
 
 const executeVoice = (message: Discord.Message) => {
-    const filePath = './src/assets/audios/speech.mp3';
-    message.member?.voice.channel?.join().then(connection => {
-      connection.play(fs.createReadStream(filePath)).on('finish', () => {
-        setTimeout(() => {
-          message.member?.voice.channel?.leave();
-        }, 500);
-      });
-    });
+  const filePath = './src/assets/audios/speech.mp3'
+
+  const channel =
+    message.member?.voice.channel || ({} as Discord.VoiceBasedChannel)
+
+  const connection = joinVoiceChannel({
+    channelId: channel.id,
+    guildId: channel.guild.id,
+    adapterCreator: channel.guild.voiceAdapterCreator as any,
+  })
+
+  // console.log('connection', connection)
+
+  connection.on(VoiceConnectionStatus.Ready, () => {
+    console.log(
+      'The connection has entered the Ready state - ready to play audio!'
+    )
+
+    const player = createAudioPlayer({
+      behaviors: {
+        noSubscriber: NoSubscriberBehavior.Pause,
+      },
+    })
+
+    player.on(AudioPlayerStatus.Playing, () => {
+      console.log('The audio player has started playing!')
+    })
+
+    player.on('error', (error) => {
+      console.error(`Error: ${error.message} with resource`)
+    })
+
+    const resource = createAudioResource(filePath)
+    player.play(resource)
+
+    const subscription = connection.subscribe(player)
+
+    // subscription could be undefined if the connection is destroyed!
+    if (subscription) {
+      // Unsubscribe after 5 seconds (stop playing audio on the voice connection)
+      setTimeout(() => {
+        subscription.unsubscribe()
+        connection.disconnect()
+      }, 3000)
+    }
+  })
+
+  // message.member?.voice.channel?.join().then((connection) => {
+  //   console.log('executeVoice', connection)
+  // connection
+  //   .play(fs.createReadStream(filePath))
+  //   .on('finish', () => {
+  //     // setTimeout(() => {
+  //     //   message.member?.voice.channel?.leave()
+  //     // }, 500)
+  //   })
+
+  //   connection.
+  // })
 }
+// const executeVoice = (message: Discord.Message) => {
+//   const filePath = './src/assets/audios/speech.mp3'
+
+//   message.member?.voice.channel?.join().then((connection) => {
+//     console.log('executeVoice', connection)
+//     connection
+//       .play(fs.createReadStream(filePath))
+//       .on('finish', () => {
+//         setTimeout(() => {
+//           message.member?.voice.channel?.leave()
+//         }, 500)
+//       })
+//       .on('error', (error) => {
+//         console.log('error', error)
+//       })
+//   })
+// }
 
 const getTextAsVoice = async (text: string, language = 'pt-br') => {
-  const speech = new gtts(text, language);
+  const speech = new gtts(text, language)
 
-  await speech.save("./src/assets/audios/speech.mp3", (response: any) => {
-    console.log(response)
-
-    return true;
-  })
+  return await speech.save(
+    './src/assets/audios/speech.mp3',
+    (response: any) => {
+      return true
+    }
+  )
 }
+
+client.login(process.env.DISCORD_TOKEN)
