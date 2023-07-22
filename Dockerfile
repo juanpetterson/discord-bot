@@ -1,16 +1,12 @@
-FROM node:alpine
+FROM node:16.13-alpine3.15
 
-# Create app directory
-WORKDIR /usr/src/app
+RUN apk --no-cache add --virtual .builds-deps build-base python3
+
+WORKDIR /app
 
 COPY package*.json ./
 
-RUN apk add --no-cache --virtual .gyp \
-        python \
-        make \
-        g++ \
-    && npm install \
-    && apk del .gyp
+RUN npm install --production && npm rebuild bcrypt --build-from-source && npm cache clean --force 
 
 COPY . .
 
