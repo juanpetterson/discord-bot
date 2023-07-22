@@ -1,15 +1,16 @@
-FROM node:16.20.0
+FROM node:16-bullseye-slim AS build
 
-# Create app directory
 WORKDIR /usr/src/app
 
-COPY package*.json ./
+COPY . /usr/src/app
 
 RUN npm install
 
 
-COPY . .
+FROM gcr.io/distroless/nodejs:16
 
-EXPOSE 80
+COPY --from=build /usr/src/app /usr/src/app
+
+WORKDIR /usr/src/app
 
 CMD [ "npm", "run", "start" ]
