@@ -27,37 +27,29 @@ const client = new Client({
 
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
+
+  setInterval(() => {
+    console.log('ping')
+  }, 1000 * 60 * 5)
 })
 
 client.on('messageCreate', async (message: any) => {
   console.log('message received')
   try {
-    if (message.content.toLowerCase() === '!joke'.toLowerCase()) {
-      const joke = await getNewJoke()
+    if (message.content.toLowerCase() === '!calabacon'.toLowerCase()) {
+      const filePath = './src/assets/audios/cala-bacon-fera.mp3'
 
-      message.reply(joke)
+      executeVoice(message, filePath)
     }
-
-    // if (message.content.toLowerCase() === '!calabacon'.toLowerCase()) {
-    //   message.member?.voice.channel
-    //     ?.join()
-    //     .then((connection) => {
-    //       setTimeout(() => {
-    //         const filePath = './src/assets/audios/cala-bacon-fera.mp3'
-
-    //         connection.play(fs.createReadStream(filePath)).on('finish', () => {
-    //           setTimeout(() => {
-    //             message.member?.voice.channel?.leave()
-    //           }, 500)
-    //         })
-    //       }, 2000)
-    //     })
-    //     .catch(console.error)
-    //   return
-    // }
 
     if (message.content.toLowerCase() === '!ench'.toLowerCase()) {
       const filePath = './src/assets/audios/ench.mp3'
+
+      executeVoice(message, filePath)
+    }
+
+    if (message.content.toLowerCase() === '!ready'.toLowerCase()) {
+      const filePath = './src/assets/audios/ready.mp3'
 
       executeVoice(message, filePath)
     }
@@ -150,12 +142,6 @@ client.on('messageCreate', async (message: any) => {
   }
 })
 
-const getNewJoke = async (): Promise<string> => {
-  const { data } = await axios.get('https://api.chucknorris.io/jokes/random')
-
-  return data.value
-}
-
 const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
   const filePath = overrideFilePath || './src/assets/audios/speech.mp3'
 
@@ -167,8 +153,6 @@ const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
     guildId: channel.guild.id,
     adapterCreator: channel.guild.voiceAdapterCreator as any,
   })
-
-  // console.log('connection', connection)
 
   connection.on(VoiceConnectionStatus.Ready, () => {
     console.log(
@@ -194,55 +178,26 @@ const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
 
     const subscription = connection.subscribe(player)
 
+    let timeout: NodeJS.Timeout
+
     player.on('stateChange', (state) => {
       if (state.status === AudioPlayerStatus.Playing) {
         console.log('stateChange', state)
 
-        const timeout = state.playbackDuration || 3000
+        const timeoutTime = state.playbackDuration || 3000
 
         if (subscription) {
+          if (timeout) clearTimeout(timeout)
           // Unsubscribe after 5 seconds (stop playing audio on the voice connection)
-          setTimeout(() => {
+          timeout = setTimeout(() => {
             subscription.unsubscribe()
             connection.disconnect()
-          }, timeout)
+          }, timeoutTime)
         }
       }
     })
-
-    // subscription could be undefined if the connection is destroyed!
   })
-
-  // message.member?.voice.channel?.join().then((connection) => {
-  //   console.log('executeVoice', connection)
-  // connection
-  //   .play(fs.createReadStream(filePath))
-  //   .on('finish', () => {
-  //     // setTimeout(() => {
-  //     //   message.member?.voice.channel?.leave()
-  //     // }, 500)
-  //   })
-
-  //   connection.
-  // })
 }
-// const executeVoice = (message: Discord.Message) => {
-//   const filePath = './src/assets/audios/speech.mp3'
-
-//   message.member?.voice.channel?.join().then((connection) => {
-//     console.log('executeVoice', connection)
-//     connection
-//       .play(fs.createReadStream(filePath))
-//       .on('finish', () => {
-//         setTimeout(() => {
-//           message.member?.voice.channel?.leave()
-//         }, 500)
-//       })
-//       .on('error', (error) => {
-//         console.log('error', error)
-//       })
-//   })
-// }
 
 const getTextAsVoice = async (text: string, language = 'pt-br') => {
   const speech = new gtts(text, language)
