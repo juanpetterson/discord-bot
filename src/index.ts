@@ -24,7 +24,6 @@ const client = new Client({
     Intents.FLAGS.GUILD_VOICE_STATES,
   ],
 })
-// const client = new Discord.Client()
 
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
@@ -189,14 +188,23 @@ const executeVoice = (message: Discord.Message) => {
 
     const subscription = connection.subscribe(player)
 
+    player.on('stateChange', (state) => {
+      if (state.status === AudioPlayerStatus.Playing) {
+        console.log('stateChange', state)
+
+        const timeout = state.playbackDuration || 3000
+
+        if (subscription) {
+          // Unsubscribe after 5 seconds (stop playing audio on the voice connection)
+          setTimeout(() => {
+            subscription.unsubscribe()
+            connection.disconnect()
+          }, timeout)
+        }
+      }
+    })
+
     // subscription could be undefined if the connection is destroyed!
-    if (subscription) {
-      // Unsubscribe after 5 seconds (stop playing audio on the voice connection)
-      setTimeout(() => {
-        subscription.unsubscribe()
-        connection.disconnect()
-      }, 3000)
-    }
   })
 
   // message.member?.voice.channel?.join().then((connection) => {
