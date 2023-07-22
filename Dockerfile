@@ -1,8 +1,9 @@
-FROM node:16-bullseye-slim AS build
+FROM node:16.15.0
 
+# Create app directory
 WORKDIR /usr/src/app
 
-COPY . /usr/src/app
+COPY package*.json ./
 
 RUN apk add --no-cache --virtual .gyp \
         python \
@@ -11,11 +12,6 @@ RUN apk add --no-cache --virtual .gyp \
     && npm install \
     && apk del .gyp
 
-
-FROM gcr.io/distroless/nodejs:16
-
-COPY --from=build /usr/src/app /usr/src/app
-
-WORKDIR /usr/src/app
+COPY . .
 
 CMD [ "npm", "run", "start" ]
