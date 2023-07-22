@@ -1,15 +1,21 @@
-FROM node:alpine
+FROM node:alpine AS build
 
-# Create app directory
 WORKDIR /usr/src/app
 
-COPY package*.json ./
+COPY . /usr/src/app
 
-RUN npm install
+RUN apk add --no-cache --virtual .gyp \
+        python \
+        make \
+        g++ \
+    && npm install \
+    && apk del .gyp
 
 
-COPY . .
+FROM gcr.io/distroless/nodejs:16
 
-EXPOSE 80
+COPY --from=build /usr/src/app /usr/src/app
+
+WORKDIR /usr/src/app
 
 CMD [ "npm", "run", "start" ]
