@@ -56,6 +56,12 @@ client.on('messageCreate', async (message: any) => {
     //   return
     // }
 
+    if (message.content.toLowerCase() === '!ench'.toLowerCase()) {
+      const filePath = './src/assets/audios/ench.mp3'
+
+      executeVoice(message, filePath)
+    }
+
     if (message.content === '!fg') {
       await getTextAsVoice('para de putaria')
       executeVoice(message)
@@ -150,8 +156,8 @@ const getNewJoke = async (): Promise<string> => {
   return data.value
 }
 
-const executeVoice = (message: Discord.Message) => {
-  const filePath = './src/assets/audios/speech.mp3'
+const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
+  const filePath = overrideFilePath || './src/assets/audios/speech.mp3'
 
   const channel =
     message.member?.voice.channel || ({} as Discord.VoiceBasedChannel)
