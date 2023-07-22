@@ -1,16 +1,15 @@
-FROM node:16-bullseye-slim AS build
+FROM node:alpine
 
+# Create app directory
 WORKDIR /usr/src/app
 
-COPY . /usr/src/app
+COPY package*.json ./
 
 RUN npm install
 
 
-FROM gcr.io/distroless/nodejs:16
+COPY . .
 
-COPY --from=build /usr/src/app /usr/src/app
-
-WORKDIR /usr/src/app
+EXPOSE 80
 
 CMD [ "npm", "run", "start" ]
