@@ -1,8 +1,6 @@
 require('dotenv').config()
 
 import Discord, { Client, Intents } from 'discord.js'
-import axios from 'axios'
-import fs from 'fs'
 const gtts = require('gtts')
 import {
   VoiceConnectionStatus,
@@ -25,13 +23,21 @@ const client = new Client({
   ],
 })
 
+let hasLastInteraction = false
+let interactionTimeout: NodeJS.Timeout
+let lastExecutionData: Discord.Message
+
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
-
-  setInterval(() => {
-    console.log('ping')
-  }, 1000 * 60 * 5)
 })
+
+setInterval(() => {
+  console.log('checking if is time to execute')
+  if (!hasLastInteraction) {
+    console.log('executing')
+    executeVoice(lastExecutionData)
+  }
+}, 1000 * 60 * 10)
 
 client.on('messageCreate', async (message: any) => {
   console.log('message received')
@@ -143,10 +149,15 @@ client.on('messageCreate', async (message: any) => {
 })
 
 const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
+  hasLastInteraction = true
+  clearTimeout(interactionTimeout)
+
   const filePath = overrideFilePath || './src/assets/audios/speech.mp3'
 
   const channel =
     message.member?.voice.channel || ({} as Discord.VoiceBasedChannel)
+
+  lastExecutionData = message
 
   const connection = joinVoiceChannel({
     channelId: channel.id,
@@ -196,6 +207,10 @@ const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
         }
       }
     })
+
+    interactionTimeout = setTimeout(() => {
+      hasLastInteraction = false
+    }, 1000 * 60 * 5)
   })
 }
 
