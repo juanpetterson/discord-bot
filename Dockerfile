@@ -1,4 +1,4 @@
-FROM node:alpine AS build
+FROM node:16-bullseye-slim AS build
 
 WORKDIR /usr/src/app
 
