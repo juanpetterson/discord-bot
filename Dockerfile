@@ -10,4 +10,4 @@ RUN npm install --production && npm rebuild bcrypt --build-from-source && npm ca
 
 COPY . .
 
-CMD [ "npm", "run", "start" ]
+CMD [ "npm", "run", "dev" ]
