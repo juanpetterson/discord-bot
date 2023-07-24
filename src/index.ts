@@ -39,6 +39,10 @@ setInterval(() => {
   }
 }, 1000 * 60 * 10)
 
+setInterval(() => {
+  console.log('pinging', new Date().toISOString())
+}, 1000)
+
 client.on('messageCreate', async (message: any) => {
   console.log('message received')
   try {
