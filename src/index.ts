@@ -31,17 +31,17 @@ client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
 })
 
-setInterval(() => {
-  console.log('checking if is time to execute')
-  if (!hasLastInteraction) {
-    console.log('executing')
-    executeVoice(lastExecutionData)
-  }
-}, 1000 * 60 * 10)
+// setInterval(() => {
+//   console.log('checking if is time to execute')
+//   if (!hasLastInteraction) {
+//     console.log('executing')
+//     executeVoice(lastExecutionData)
+//   }
+// }, 1000 * 60 * 10)
 
-setInterval(() => {
-  console.log('pinging', new Date().toISOString())
-}, 1000)
+// setInterval(() => {
+//   console.log('pinging', new Date().toISOString())
+// }, 1000)
 
 client.on('messageCreate', async (message: any) => {
   console.log('message received')
