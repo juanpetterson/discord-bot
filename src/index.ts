@@ -1,10 +1,10 @@
 require('dotenv').config()
 
+import axios from 'axios'
 import Discord, { Client, Intents } from 'discord.js'
-const gtts = require('gtts')
+import fs from 'fs'
 import {
   VoiceConnectionStatus,
-  generateDependencyReport,
   joinVoiceChannel,
   createAudioPlayer,
   NoSubscriberBehavior,
@@ -12,7 +12,9 @@ import {
   AudioPlayerStatus,
 } from '@discordjs/voice'
 
-console.log(generateDependencyReport())
+import { keepAlive } from './server'
+
+const gtts = require('gtts')
 
 const client = new Client({
   intents: [
@@ -20,28 +22,15 @@ const client = new Client({
     Intents.FLAGS.GUILD_MESSAGES,
     Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
     Intents.FLAGS.GUILD_VOICE_STATES,
+    Intents.FLAGS.DIRECT_MESSAGES,
   ],
 })
 
-let hasLastInteraction = false
 let interactionTimeout: NodeJS.Timeout
-let lastExecutionData: Discord.Message
 
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
 })
-
-// setInterval(() => {
-//   console.log('checking if is time to execute')
-//   if (!hasLastInteraction) {
-//     console.log('executing')
-//     executeVoice(lastExecutionData)
-//   }
-// }, 1000 * 60 * 10)
-
-// setInterval(() => {
-//   console.log('pinging', new Date().toISOString())
-// }, 1000)
 
 client.on('messageCreate', async (message: any) => {
   console.log('message received')
@@ -68,6 +57,11 @@ client.on('messageCreate', async (message: any) => {
       await getTextAsVoice('para de putaria')
       executeVoice(message)
     }
+
+    // if (message.content === '!hi') {
+    //   await getTextAsVoiceIA('hi')
+    //   executeVoice(message)
+    // }
 
     if (message.content.toLowerCase().startsWith('$')) {
       const args = message.content.split(' ')
@@ -153,15 +147,12 @@ client.on('messageCreate', async (message: any) => {
 })
 
 const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
-  hasLastInteraction = true
   clearTimeout(interactionTimeout)
 
   const filePath = overrideFilePath || './src/assets/audios/speech.mp3'
 
   const channel =
     message.member?.voice.channel || ({} as Discord.VoiceBasedChannel)
-
-  lastExecutionData = message
 
   const connection = joinVoiceChannel({
     channelId: channel.id,
@@ -211,10 +202,6 @@ const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
         }
       }
     })
-
-    interactionTimeout = setTimeout(() => {
-      hasLastInteraction = false
-    }, 1000 * 60 * 5)
   })
 }
 
@@ -229,4 +216,48 @@ const getTextAsVoice = async (text: string, language = 'pt-br') => {
   )
 }
 
+const getTextAsVoiceIA = async (text: string, language = 'pt-br') => {
+  const data = {
+    text: 'Hi Cris. Yeah, this one worked',
+    model_id: 'eleven_monolingual_v1',
+    voice_settings: {
+      stability: 0.5,
+      similarity_boost: 0.5,
+    },
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': process.env.ELEVEN_TOKEN,
+        },
+        responseType: 'arraybuffer', // Ensure you receive the response as an ArrayBuffer
+      }
+    )
+
+    const audioData = Buffer.from(response.data, 'binary').toString('base64')
+
+    // Call the function to save the audio data to a file
+    saveAudioToFile(audioData, './src/assets/audios/speech.mp3')
+  } catch (error: any) {
+    console.error('Error fetching the audio:', error.message)
+  }
+}
+
+const saveAudioToFile = (audioData: any, fileName: string) => {
+  const buffer = Buffer.from(audioData, 'base64')
+  fs.writeFile(fileName, buffer, (err: any) => {
+    if (err) {
+      console.error('Error saving the audio to file:', err.message)
+    } else {
+      console.log('Audio saved to file:', fileName)
+    }
+  })
+}
+
+keepAlive()
 client.login(process.env.DISCORD_TOKEN)
