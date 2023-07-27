@@ -19,6 +19,7 @@
     "@discordjs/voice": "^0.16.0",
     "@types/axios": "^0.14.0",
     "@types/node": "^14.14.34",
+    "aws-sdk": "^2.1423.0",
     "axios": "^0.21.1",
     "discord.js": "^13.1.0",
     "dotenv": "^8.2.0",

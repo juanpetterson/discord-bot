@@ -15,6 +15,7 @@ import {
 import { keepAlive } from './server'
 
 const gtts = require('gtts')
+import AWS from 'aws-sdk'
 
 const client = new Client({
   intents: [
@@ -58,10 +59,22 @@ client.on('messageCreate', async (message: any) => {
       executeVoice(message)
     }
 
-    // if (message.content === '!hi') {
-    //   await getTextAsVoiceIA('hi')
-    //   executeVoice(message)
-    // }
+    if (message.content === '!hi') {
+      await getTextAsVoiceIA('hi')
+      executeVoice(message)
+    }
+
+    if (message.content.toLowerCase().startsWith('%')) {
+      const args = message.content.split(' ')
+      await getTextAsVoiceIA(args.join('').replace('%', ''))
+      executeVoice(message)
+    }
+
+    if (message.content.toLowerCase().startsWith('&')) {
+      const args = message.content.split(' ')
+      await getTextAsVoiceAWS(args.join('').replace('&', ''))
+      executeVoice(message)
+    }
 
     if (message.content.toLowerCase().startsWith('$')) {
       const args = message.content.split(' ')
@@ -188,7 +201,7 @@ const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
 
     player.on('stateChange', (state) => {
       if (state.status === AudioPlayerStatus.Playing) {
-        console.log('stateChange', state)
+        // console.log('stateChange', state)
 
         const timeoutTime = state.playbackDuration || 3000
 
@@ -196,8 +209,9 @@ const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
           if (timeout) clearTimeout(timeout)
           // Unsubscribe after 5 seconds (stop playing audio on the voice connection)
           timeout = setTimeout(() => {
+            console.log('clearing timeout')
             subscription.unsubscribe()
-            connection.disconnect()
+            connection.destroy()
           }, timeoutTime)
         }
       }
@@ -218,7 +232,7 @@ const getTextAsVoice = async (text: string, language = 'pt-br') => {
 
 const getTextAsVoiceIA = async (text: string, language = 'pt-br') => {
   const data = {
-    text: 'Hi Cris. Yeah, this one worked',
+    text,
     model_id: 'eleven_monolingual_v1',
     voice_settings: {
       stability: 0.5,
@@ -242,7 +256,54 @@ const getTextAsVoiceIA = async (text: string, language = 'pt-br') => {
     const audioData = Buffer.from(response.data, 'binary').toString('base64')
 
     // Call the function to save the audio data to a file
-    saveAudioToFile(audioData, './src/assets/audios/speech.mp3')
+    return saveAudioToFile(audioData, './src/assets/audios/speech.mp3')
+  } catch (error: any) {
+    console.error('Error fetching the audio:', error.message)
+  }
+}
+
+const getTextAsVoiceAWS = async (text: string, language = 'pt-br') => {
+  try {
+    AWS.config.update({
+      accessKeyId: process.env.AWS_ACCESS_KEY,
+      secretAccessKey: process.env.AWS_SECRET_KEY,
+      region: 'us-east-1', // Replace with your desired AWS region
+    })
+
+    const polly = new AWS.Polly({
+      region: 'us-east-1', // Change this to your desired region
+    })
+
+    const params = {
+      Text: text,
+      OutputFormat: 'mp3', // e.g., 'mp3', 'ogg_vorbis', 'pcm', etc.
+      VoiceId: 'Joanna', // e.g., 'Joanna', 'Matthew', 'Emma', etc. (see available voices below)
+    }
+
+    return polly
+      .synthesizeSpeech(params, (err: any, data: any) => {
+        if (err) {
+          console.error('Error:', err)
+          return false
+        } else if (data.AudioStream instanceof Buffer) {
+          // Process the audio stream (data.AudioStream) as per your requirement
+          // For example, you can save the audio to a file or play it in the browser
+          console.log('Audio generated successfully!')
+
+          const audioData = Buffer.from(data.AudioStream, 'binary').toString(
+            'base64'
+          )
+
+          // Call the function to save the audio data to a file
+          saveAudioToFile(audioData, './src/assets/audios/speech.mp3')
+          return true
+        }
+      })
+      .promise()
+
+    // const audioData = Buffer.from(response.data, 'binary').toString('base64')
+    // // Call the function to save the audio data to a file
+    // saveAudioToFile(audioData, './src/assets/audios/speech.mp3')
   } catch (error: any) {
     console.error('Error fetching the audio:', error.message)
   }
