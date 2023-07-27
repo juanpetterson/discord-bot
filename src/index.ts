@@ -211,7 +211,9 @@ const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
           timeout = setTimeout(() => {
             console.log('clearing timeout')
             subscription.unsubscribe()
-            connection.destroy()
+            if (connection.state.status !== VoiceConnectionStatus.Destroyed) {
+              connection.destroy()
+            }
           }, timeoutTime)
         }
       }
