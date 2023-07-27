@@ -27,8 +27,6 @@ const client = new Client({
   ],
 })
 
-let interactionTimeout: NodeJS.Timeout
-
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
 })
@@ -160,65 +158,67 @@ client.on('messageCreate', async (message: any) => {
 })
 
 const executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
-  clearTimeout(interactionTimeout)
+  try {
+    const filePath = overrideFilePath || './src/assets/audios/speech.mp3'
 
-  const filePath = overrideFilePath || './src/assets/audios/speech.mp3'
+    const channel =
+      message.member?.voice.channel || ({} as Discord.VoiceBasedChannel)
 
-  const channel =
-    message.member?.voice.channel || ({} as Discord.VoiceBasedChannel)
-
-  const connection = joinVoiceChannel({
-    channelId: channel.id,
-    guildId: channel.guild.id,
-    adapterCreator: channel.guild.voiceAdapterCreator as any,
-  })
-
-  connection.on(VoiceConnectionStatus.Ready, () => {
-    console.log(
-      'The connection has entered the Ready state - ready to play audio!'
-    )
-
-    const player = createAudioPlayer({
-      behaviors: {
-        noSubscriber: NoSubscriberBehavior.Pause,
-      },
+    const connection = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator as any,
     })
 
-    player.on(AudioPlayerStatus.Playing, () => {
-      console.log('The audio player has started playing!')
-    })
+    connection.on(VoiceConnectionStatus.Ready, () => {
+      console.log(
+        'The connection has entered the Ready state - ready to play audio!'
+      )
 
-    player.on('error', (error) => {
-      console.error(`Error: ${error.message} with resource`)
-    })
+      const player = createAudioPlayer({
+        behaviors: {
+          noSubscriber: NoSubscriberBehavior.Pause,
+        },
+      })
 
-    const resource = createAudioResource(filePath)
-    player.play(resource)
+      player.on(AudioPlayerStatus.Playing, () => {
+        console.log('The audio player has started playing!')
+      })
 
-    const subscription = connection.subscribe(player)
+      player.on('error', (error) => {
+        console.error(`Error: ${error.message} with resource`)
+      })
 
-    let timeout: NodeJS.Timeout
+      const resource = createAudioResource(filePath)
+      player.play(resource)
 
-    player.on('stateChange', (state) => {
-      if (state.status === AudioPlayerStatus.Playing) {
-        // console.log('stateChange', state)
+      const subscription = connection.subscribe(player)
 
-        const timeoutTime = state.playbackDuration || 3000
+      let timeout: NodeJS.Timeout
 
-        if (subscription) {
-          if (timeout) clearTimeout(timeout)
-          // Unsubscribe after 5 seconds (stop playing audio on the voice connection)
-          timeout = setTimeout(() => {
-            console.log('clearing timeout')
-            subscription.unsubscribe()
-            if (connection.state.status !== VoiceConnectionStatus.Destroyed) {
-              connection.destroy()
-            }
-          }, timeoutTime)
+      player.on('stateChange', (state) => {
+        if (state.status === AudioPlayerStatus.Playing) {
+          // console.log('stateChange', state)
+
+          const timeoutTime = state.playbackDuration || 3000
+
+          if (subscription) {
+            if (timeout) clearTimeout(timeout)
+            // Unsubscribe after 5 seconds (stop playing audio on the voice connection)
+            timeout = setTimeout(() => {
+              console.log('clearing timeout')
+              subscription.unsubscribe()
+              if (connection.state.status !== VoiceConnectionStatus.Destroyed) {
+                connection.destroy()
+              }
+            }, timeoutTime)
+          }
         }
-      }
+      })
     })
-  })
+  } catch (error) {
+    console.log('error on executeVoice')
+  }
 }
 
 const getTextAsVoice = async (text: string, language = 'pt-br') => {
