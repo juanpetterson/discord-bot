@@ -46,6 +46,18 @@ client.on('messageCreate', async (message: any) => {
       executeVoice(message, filePath)
     }
 
+    if (message.content.toLowerCase() === '!binhomajolo'.toLowerCase()) {
+      const filePath = './src/assets/audios/binho-majolo.mp3'
+
+      executeVoice(message, filePath)
+    }
+
+    if (message.content.toLowerCase() === '!binho'.toLowerCase()) {
+      const filePath = './src/assets/audios/binho-afiliar.mp3'
+
+      executeVoice(message, filePath)
+    }
+
     if (message.content.toLowerCase() === '!ready'.toLowerCase()) {
       const filePath = './src/assets/audios/ready.mp3'
 
