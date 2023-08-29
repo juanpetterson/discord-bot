@@ -52,7 +52,7 @@ client.on('messageCreate', async (message: any) => {
       executeVoice(message, filePath)
     }
 
-    if (message.content.toLowerCase() === '!binho'.toLowerCase()) {
+    if (message.content.toLowerCase() === '!binhoafiliado'.toLowerCase()) {
       const filePath = './src/assets/audios/binho-afiliar.mp3'
 
       executeVoice(message, filePath)
