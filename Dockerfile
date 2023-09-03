@@ -10,4 +10,6 @@ RUN npm install --production && npm rebuild bcrypt --build-from-source && npm ca
 
 COPY . .
 
+EXPOSE 3000
+
 CMD [ "npm", "run", "start" ]
