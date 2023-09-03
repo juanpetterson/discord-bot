@@ -8,7 +8,7 @@ server.all('/', (req, res) => {
 })
 
 export const keepAlive = () => {
-  server.listen(3000, () => {
+  server.listen(8080, () => {
     console.log('Server is ready!')
   })
 }
