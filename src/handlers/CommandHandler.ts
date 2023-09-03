@@ -10,6 +10,8 @@ commandsMap.set('ench', 'ench.mp3')
 commandsMap.set('ready', 'ready.mp3')
 commandsMap.set('binhomajolo', 'binho-majolo.mp3')
 commandsMap.set('binhoafiliado', 'binho-afiliar.mp3')
+commandsMap.set('morri', 'morri.mp3')
+commandsMap.set('morri2', 'morri2.mp3')
 
 type CommandProps = {
   message: Message

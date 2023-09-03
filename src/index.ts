@@ -6,14 +6,6 @@ import { keepAlive } from './server'
 import { CommandHandler } from './handlers/CommandHandler'
 import { VoiceType } from './handlers/TextToVoiceHandler'
 
-const commandsMap = new Map<string, string>()
-commandsMap.set('calabacon', 'cala-bacon-fera.mp3')
-commandsMap.set('ench', 'ench.mp3')
-commandsMap.set('ready', 'ready.mp3')
-commandsMap.set('binhomajolo', 'binho-majolo.mp3')
-commandsMap.set('binhoafiliado', 'binho-afiliar.mp3')
-commandsMap.set('morri', 'morri.mp3')
-
 const client = new Client({
   intents: [
     Intents.FLAGS.GUILDS,
