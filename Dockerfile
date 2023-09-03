@@ -1,4 +1,4 @@
-FROM node:16.13-alpine3.15
+FROM node:16.15.0-alpine
 
 RUN apk --no-cache add --virtual .builds-deps build-base python3
 
@@ -10,4 +10,4 @@ RUN npm install --production && npm rebuild bcrypt --build-from-source && npm ca
 
 COPY . .
 
-CMD [ "npm", "run", "dev" ]
+CMD [ "npm", "run", "start" ]
