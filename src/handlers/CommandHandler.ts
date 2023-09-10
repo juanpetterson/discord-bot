@@ -53,6 +53,8 @@ export class CommandHandler {
         language = lastArg.replace('<', '').replace('>', '')
         args.pop()
       }
+
+      text = args.join(' ').replace('$', '')
     }
 
     const textToVoiceHandler = new TextToVoiceHandler(voiceType)
