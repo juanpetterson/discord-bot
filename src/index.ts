@@ -1,11 +1,21 @@
 require('dotenv').config()
 
-import { Client, Intents, Message, MessageEmbed } from 'discord.js'
+import {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  Message,
+  EmbedBuilder,
+  CacheType,
+  Interaction,
+} from 'discord.js'
 import heroes from './assets/data/heroes.json'
 
 import { keepAlive } from './server'
 import { CommandHandler } from './handlers/CommandHandler'
 import { VoiceType } from './handlers/TextToVoiceHandler'
+
+import { registerCommands } from './register-commands'
 
 const COLORS_SCHEME = {
   0: 0x3071f7,
@@ -23,12 +33,13 @@ const COLORS_SCHEME_EXTRA = {
 
 const client = new Client({
   intents: [
-    Intents.FLAGS.GUILDS,
-    Intents.FLAGS.GUILD_MESSAGES,
-    Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
-    Intents.FLAGS.GUILD_VOICE_STATES,
-    Intents.FLAGS.DIRECT_MESSAGES,
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.DirectMessages,
   ],
+  partials: [Partials.Channel],
 })
 
 client.once('clientReady', (c: any) => {
@@ -142,7 +153,38 @@ client.on('messageCreate', async (message: Message) => {
   }
 })
 
-function getRandomHero(ignoreHeroes: Set<number> = new Set()) {
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return
+
+  if (interaction.commandName === 'random') {
+    const player1 = interaction.options.getString('player-1')
+    const player2 = interaction.options.getString('player-2')
+    const player3 = interaction.options.getString('player-3')
+    const player4 = interaction.options.getString('player-4')
+    const player5 = interaction.options.getString('player-5')
+    const count = interaction.options.getInteger('count') || ''
+
+    const players = [player1, player2, player3, player4, player5].filter(
+      (player) => !!player
+    ) as string[]
+
+    if (!count && !players) return
+
+    console.log('randomizeHeroes', count, players)
+
+    if (players.length > 0) {
+      console.log('randomizeHeroes players')
+      return randomizeHeroes(interaction, 0, players)
+    }
+
+    if (Number.isInteger(+count)) {
+      console.log('randomizeHeroes count')
+      return randomizeHeroes(interaction, +count)
+    }
+  }
+})
+
+export function getRandomHero(ignoreHeroes: Set<number> = new Set()) {
   const availableHeroes = heroes.filter((hero) => !ignoreHeroes.has(hero.id))
   const randomIndex = Math.floor(Math.random() * availableHeroes.length)
   const hero = availableHeroes[randomIndex]
@@ -150,8 +192,8 @@ function getRandomHero(ignoreHeroes: Set<number> = new Set()) {
   return hero
 }
 
-function randomizeHeroes(
-  message: Message,
+export function randomizeHeroes(
+  message: Message | Interaction<CacheType>,
   count = 1,
   playerNames: string[] = []
 ) {
@@ -172,7 +214,7 @@ function randomizeHeroes(
 
     const color: any = COLORS_SCHEME[i] || 0x3071f7
 
-    const exampleEmbed = new MessageEmbed()
+    const exampleEmbed = new EmbedBuilder()
       .setColor(color) // update color based on dota team
       .setTitle(hero.localized_name)
       .setThumbnail(
@@ -196,7 +238,7 @@ function randomizeHeroes(
 
     const color: any = COLORS_SCHEME_EXTRA[i] || 0x3071f7
 
-    const exampleEmbed = new MessageEmbed()
+    const exampleEmbed = new EmbedBuilder()
       .setColor(color) // update color based on dota team
       .setTitle(hero.localized_name)
       .setThumbnail(
@@ -214,4 +256,5 @@ function randomizeHeroes(
 }
 
 keepAlive()
+registerCommands()
 client.login(process.env.DISCORD_TOKEN)
