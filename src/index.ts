@@ -256,5 +256,5 @@ export function randomizeHeroes(
 }
 
 keepAlive()
-registerCommands()
+// registerCommands()
 client.login(process.env.DISCORD_TOKEN)

@@ -50,11 +50,9 @@ const commands = [
 ]
 
 // Construct and prepare an instance of the REST module
-const guildId = process.env.GUILD_ID
-const clientId = process.env.CLIENT_ID
-const rest = new REST().setToken(
-  'ODIwNzgyMjY0NTU5NDY4NTY3.GTL5_8.MM5YqAwzWrRb0pSPnf5FEYhJ8hFLCyJMdmF5NA'
-)
+const guildId = process.env.GUILD_ID || '' // load from server usage
+const clientId = process.env.CLIENT_ID || ''
+const rest = new REST().setToken(process.env.DISCORD_TOKEN || '')
 
 // and deploy your commands!
 export const registerCommands = async () => {
