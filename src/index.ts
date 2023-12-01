@@ -156,6 +156,7 @@ function randomizeHeroes(
   const randomizedPlayers = playerNames.sort(() => Math.random() - 0.5)
 
   const maxRandom = playerNames?.length || Math.min(count, 5)
+  const embedMessages = []
 
   for (let i = 0; i < maxRandom; i++) {
     const hero = getRandomHero(alreadyUsedHeroes)
@@ -176,8 +177,10 @@ function randomizeHeroes(
       exampleEmbed.setDescription(randomizedPlayers[i])
     }
 
-    channel.send({ embeds: [exampleEmbed] })
+    embedMessages.push(exampleEmbed)
   }
+
+  channel.send({ embeds: embedMessages })
 }
 
 keepAlive()
