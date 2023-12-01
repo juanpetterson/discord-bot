@@ -43,9 +43,11 @@ client.on('messageCreate', async (message: Message) => {
       if (!randomCount && !playerNames.length) return
 
       if (!Number.isInteger(+randomCount)) {
+        console.log('randomizeHeroes players')
         return randomizeHeroes(message, 0, playerNames)
       }
 
+      console.log('randomizeHeroes count')
       return randomizeHeroes(message, +randomCount)
     }
 
@@ -147,6 +149,7 @@ function randomizeHeroes(
   count = 1,
   playerNames: string[] = []
 ) {
+  console.log('randomizeHeroes', count, playerNames)
   const alreadyUsedHeroes = new Set<number>()
   const channel = message.channel
 
