@@ -162,6 +162,8 @@ function randomizeHeroes(
     const hero = getRandomHero(alreadyUsedHeroes)
     alreadyUsedHeroes.add(hero.id)
 
+    console.log('randomizeHeroes hero', hero.localized_name)
+
     const color: any = COLORS_SCHEME[i] || 0x3071f7
 
     const exampleEmbed = new MessageEmbed()
