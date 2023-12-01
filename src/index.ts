@@ -1,10 +1,19 @@
 require('dotenv').config()
 
-import { Client, Intents, Message } from 'discord.js'
+import { Client, Intents, Message, MessageEmbed } from 'discord.js'
+import heroes from './assets/data/heroes.json'
 
 import { keepAlive } from './server'
 import { CommandHandler } from './handlers/CommandHandler'
 import { VoiceType } from './handlers/TextToVoiceHandler'
+
+const COLORS_SCHEME = {
+  0: 0x3071f7,
+  1: 0x63f8bc,
+  2: 0xbe00bb,
+  3: 0xedeb09,
+  4: 0xf46402,
+}
 
 const client = new Client({
   intents: [
@@ -25,6 +34,15 @@ client.on('messageCreate', async (message: Message) => {
   try {
     const commandHandler = new CommandHandler()
     const messageContent = message.content.toLowerCase()
+
+    if (messageContent.startsWith('!random')) {
+      const args = messageContent.split(' ')
+      const randomCount = args[args.length - 1]
+
+      if (!randomCount) return
+
+      return randomizeHeroes(message, +randomCount)
+    }
 
     if (messageContent.startsWith('!')) {
       commandHandler.execute({ message, command: messageContent })
@@ -110,6 +128,37 @@ client.on('messageCreate', async (message: Message) => {
     'cy' : 'Welsh'`)
   }
 })
+
+function getRandomHero(ignoreHeroes: Set<number> = new Set()) {
+  const availableHeroes = heroes.filter((hero) => !ignoreHeroes.has(hero.id))
+  const randomIndex = Math.floor(Math.random() * availableHeroes.length)
+  const hero = availableHeroes[randomIndex]
+
+  return hero
+}
+
+function randomizeHeroes(message: Message, count = 1) {
+  const alreadyUsedHeroes = new Set<number>()
+  const channel = message.channel
+
+  const maxRandom = Math.min(count, 5)
+
+  for (let i = 0; i < maxRandom; i++) {
+    const hero = getRandomHero(alreadyUsedHeroes)
+    alreadyUsedHeroes.add(hero.id)
+
+    const color: any = COLORS_SCHEME[i] || 0x3071f7
+
+    const exampleEmbed = new MessageEmbed()
+      .setColor(color) // update color based on dota team
+      .setTitle(hero.localized_name)
+      .setThumbnail(
+        `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hero.name}.png`
+      )
+
+    channel.send({ embeds: [exampleEmbed] })
+  }
+}
 
 keepAlive()
 client.login(process.env.DISCORD_TOKEN)
