@@ -37,9 +37,14 @@ client.on('messageCreate', async (message: Message) => {
 
     if (messageContent.startsWith('!random')) {
       const args = messageContent.split(' ')
-      const randomCount = args[args.length - 1]
+      const playerNames = args.slice(1)
+      const randomCount = args[1]
 
-      if (!randomCount) return
+      if (!randomCount && !playerNames.length) return
+
+      if (!Number.isInteger(+randomCount)) {
+        return randomizeHeroes(message, 0, playerNames)
+      }
 
       return randomizeHeroes(message, +randomCount)
     }
@@ -137,11 +142,17 @@ function getRandomHero(ignoreHeroes: Set<number> = new Set()) {
   return hero
 }
 
-function randomizeHeroes(message: Message, count = 1) {
+function randomizeHeroes(
+  message: Message,
+  count = 1,
+  playerNames: string[] = []
+) {
   const alreadyUsedHeroes = new Set<number>()
   const channel = message.channel
 
-  const maxRandom = Math.min(count, 5)
+  const randomizedPlayers = playerNames.sort(() => Math.random() - 0.5)
+
+  const maxRandom = playerNames?.length || Math.min(count, 5)
 
   for (let i = 0; i < maxRandom; i++) {
     const hero = getRandomHero(alreadyUsedHeroes)
@@ -155,6 +166,12 @@ function randomizeHeroes(message: Message, count = 1) {
       .setThumbnail(
         `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hero.name}.png`
       )
+
+    // add joke after player name
+
+    if (randomizedPlayers[i]) {
+      exampleEmbed.setDescription(randomizedPlayers[i])
+    }
 
     channel.send({ embeds: [exampleEmbed] })
   }
