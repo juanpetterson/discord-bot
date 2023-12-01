@@ -15,6 +15,12 @@ const COLORS_SCHEME = {
   4: 0xf46402,
 }
 
+const COLORS_SCHEME_EXTRA = {
+  0: 0xff71f7,
+  1: 0x63f800,
+  2: 0x00bb,
+}
+
 const client = new Client({
   intents: [
     Intents.FLAGS.GUILDS,
@@ -178,6 +184,28 @@ function randomizeHeroes(
     if (randomizedPlayers[i]) {
       exampleEmbed.setDescription(randomizedPlayers[i])
     }
+
+    embedMessages.push(exampleEmbed)
+  }
+
+  for (let i = 0; i < 3; i++) {
+    const hero = getRandomHero(alreadyUsedHeroes)
+    alreadyUsedHeroes.add(hero.id)
+
+    console.log('randomizeHeroes hero', hero.localized_name)
+
+    const color: any = COLORS_SCHEME_EXTRA[i] || 0x3071f7
+
+    const exampleEmbed = new MessageEmbed()
+      .setColor(color) // update color based on dota team
+      .setTitle(hero.localized_name)
+      .setThumbnail(
+        `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hero.name}.png`
+      )
+
+    // add joke after player name
+
+    exampleEmbed.setDescription(`Extra ${i + 1}`)
 
     embedMessages.push(exampleEmbed)
   }
