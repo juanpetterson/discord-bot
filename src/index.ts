@@ -158,6 +158,7 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return
 
   if (interaction.commandName === 'random') {
+    await interaction.reply('------- Randomized Heroes -------')
     const player1 = interaction.options.getString('player-1')
     const player2 = interaction.options.getString('player-2')
     const player3 = interaction.options.getString('player-3')
@@ -171,15 +172,11 @@ client.on('interactionCreate', async (interaction) => {
 
     if (!count && !players) return
 
-    console.log('randomizeHeroes', count, players)
-
     if (players.length > 0) {
-      console.log('randomizeHeroes players')
       return randomizeHeroes(interaction, 0, players)
     }
 
     if (Number.isInteger(+count)) {
-      console.log('randomizeHeroes count')
       return randomizeHeroes(interaction, +count)
     }
   }
@@ -198,7 +195,6 @@ export function randomizeHeroes(
   count = 1,
   playerNames: string[] = []
 ) {
-  console.log('randomizeHeroes', count, playerNames)
   const alreadyUsedHeroes = new Set<number>()
   const channel = message.channel
 
@@ -210,8 +206,6 @@ export function randomizeHeroes(
   for (let i = 0; i < maxRandom; i++) {
     const hero = getRandomHero(alreadyUsedHeroes)
     alreadyUsedHeroes.add(hero.id)
-
-    console.log('randomizeHeroes hero', hero.localized_name)
 
     const color: any = COLORS_SCHEME[i] || 0x3071f7
 
@@ -235,8 +229,6 @@ export function randomizeHeroes(
     const hero = getRandomHero(alreadyUsedHeroes)
     alreadyUsedHeroes.add(hero.id)
 
-    console.log('randomizeHeroes hero', hero.localized_name)
-
     const color: any = COLORS_SCHEME_EXTRA[i] || 0x3071f7
 
     const exampleEmbed = new EmbedBuilder()
@@ -253,7 +245,7 @@ export function randomizeHeroes(
     embedMessages.push(exampleEmbed)
   }
 
-  channel.send({ embeds: embedMessages })
+  channel?.send({ embeds: embedMessages })
 }
 
 keepAlive()
