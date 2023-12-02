@@ -26,9 +26,9 @@ const COLORS_SCHEME = {
 }
 
 const COLORS_SCHEME_EXTRA = {
-  0: 0xff71f7,
-  1: 0x63f800,
-  2: 0x00bb,
+  0: 0xff0000,
+  1: 0x00ff00,
+  2: 0x0000ff,
 }
 
 const client = new Client({
