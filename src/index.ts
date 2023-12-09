@@ -180,6 +180,44 @@ client.on('interactionCreate', async (interaction) => {
       return randomizeHeroes(interaction, +count)
     }
   }
+
+  if (interaction.commandName === 'embed') {
+    const channel = interaction.channel
+
+    await interaction.reply('-')
+    const author = interaction.options.getString('author')
+    const title = interaction.options.getString('title')
+    const description = interaction.options.getString('description')
+    const image = interaction.options.getString('image')
+    const color = interaction.options.getString('color') || null
+    // const player4 = interaction.options.getString('player-4')
+
+    const exampleEmbed = new EmbedBuilder()
+
+    if (author) {
+      exampleEmbed.setAuthor({
+        name: author,
+      })
+    }
+
+    if (title) {
+      exampleEmbed.setTitle(title)
+    }
+
+    if (description) {
+      exampleEmbed.setDescription(description)
+    }
+
+    if (image) {
+      exampleEmbed.setImage(image)
+    }
+
+    if (color) {
+      exampleEmbed.setColor(color as any)
+    }
+
+    channel?.send({ embeds: [exampleEmbed] })
+  }
 })
 
 export function getRandomHero(ignoreHeroes: Set<number> = new Set()) {

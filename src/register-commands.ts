@@ -47,6 +47,48 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'embed',
+    description: 'Send Embed Message',
+    options: [
+      {
+        name: 'author',
+        type: 3,
+        description: 'Autor',
+        required: false,
+      },
+      {
+        name: 'title',
+        type: 3,
+        description: 'Título',
+        required: false,
+      },
+      {
+        name: 'description',
+        type: 3,
+        description: 'Descrição',
+        required: false,
+      },
+      {
+        name: 'image',
+        type: 3,
+        description: 'URL da imagem',
+        required: false,
+      },
+      {
+        name: 'color',
+        type: 3,
+        description: 'Cor do embed',
+        required: false,
+      },
+      {
+        name: 'count',
+        type: 4,
+        description: 'Number of heroes',
+        required: false,
+      },
+    ],
+  },
 ]
 
 // Construct and prepare an instance of the REST module
