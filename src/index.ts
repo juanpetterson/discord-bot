@@ -31,7 +31,7 @@ const COLORS_SCHEME_EXTRA = {
   2: 0x0000ff,
 }
 
-const client = new Client({
+export const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
@@ -45,6 +45,14 @@ const client = new Client({
 
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
+})
+
+client.on('custom-message', (message: string) => {
+  const channel = client.channels.cache.get('1003668690052587623') as any
+
+  if (!channel) return
+
+  channel.send(message)
 })
 
 client.on('messageCreate', async (message: Message) => {
