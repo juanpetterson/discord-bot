@@ -4,7 +4,7 @@ const server = express()
 
 server.all('/', (req, res) => {
   console.log('Bot is running')
-  res.send('Bot is running')
+  res.send('Bot is running: ' + new Date().toISOString())
 })
 
 export const keepAlive = () => {
