@@ -1,5 +1,5 @@
 const gtts = require('gtts')
-import AWS from 'aws-sdk'
+// import AWS from 'aws-sdk'
 import fs from 'fs'
 import axios from 'axios'
 import { VoiceHandler } from './VoiceHandler'
@@ -73,45 +73,40 @@ export class TextToVoiceHandler {
   }
 
   getTextAsVoiceAWS = async (text: string, language = 'pt-br') => {
-    try {
-      AWS.config.update({
-        accessKeyId: process.env.AWS_ACCESS_KEY,
-        secretAccessKey: process.env.AWS_SECRET_KEY,
-        region: 'us-east-1', // Replace with your desired AWS region
-      })
-
-      const polly = new AWS.Polly({
-        region: 'us-east-1', // Change this to your desired region
-      })
-
-      const params = {
-        Text: text,
-        OutputFormat: 'mp3', // e.g., 'mp3', 'ogg_vorbis', 'pcm', etc.
-        VoiceId: 'Joanna', // e.g., 'Joanna', 'Matthew', 'Emma', etc. (see available voices below)
-      }
-
-      return polly
-        .synthesizeSpeech(params, (err: any, data: any) => {
-          if (err) {
-            console.error('Error:', err)
-            return false
-          } else if (data.AudioStream instanceof Buffer) {
-            // Process the audio stream (data.AudioStream) as per your requirement
-            // For example, you can save the audio to a file or play it in the browser
-            console.log('Audio generated successfully!')
-
-            const audioData = Buffer.from(data.AudioStream, 'binary').toString(
-              'base64'
-            )
-
-            this.saveAudioToFile(audioData)
-            return true
-          }
-        })
-        .promise()
-    } catch (error: any) {
-      console.error('Error fetching the audio:', error.message)
-    }
+    // try {
+    //   AWS.config.update({
+    //     accessKeyId: process.env.AWS_ACCESS_KEY,
+    //     secretAccessKey: process.env.AWS_SECRET_KEY,
+    //     region: 'us-east-1', // Replace with your desired AWS region
+    //   })
+    //   const polly = new AWS.Polly({
+    //     region: 'us-east-1', // Change this to your desired region
+    //   })
+    //   const params = {
+    //     Text: text,
+    //     OutputFormat: 'mp3', // e.g., 'mp3', 'ogg_vorbis', 'pcm', etc.
+    //     VoiceId: 'Joanna', // e.g., 'Joanna', 'Matthew', 'Emma', etc. (see available voices below)
+    //   }
+    //   return polly
+    //     .synthesizeSpeech(params, (err: any, data: any) => {
+    //       if (err) {
+    //         console.error('Error:', err)
+    //         return false
+    //       } else if (data.AudioStream instanceof Buffer) {
+    //         // Process the audio stream (data.AudioStream) as per your requirement
+    //         // For example, you can save the audio to a file or play it in the browser
+    //         console.log('Audio generated successfully!')
+    //         const audioData = Buffer.from(data.AudioStream, 'binary').toString(
+    //           'base64'
+    //         )
+    //         this.saveAudioToFile(audioData)
+    //         return true
+    //       }
+    //     })
+    //     .promise()
+    // } catch (error: any) {
+    //   console.error('Error fetching the audio:', error.message)
+    // }
   }
 
   private saveAudioToFile = (
