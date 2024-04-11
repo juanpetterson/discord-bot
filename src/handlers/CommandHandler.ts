@@ -1,8 +1,8 @@
-import fs from 'fs'
-import { ASSETS_PATH } from '../constants'
-import { VoiceHandler } from './VoiceHandler'
 import { Message } from 'discord.js'
+import fs from 'fs'
+import { ASSETS_PATH, AUDIO_COMMANDS_ASSETS_PATH } from '../constants'
 import { TextToVoiceHandler, VoiceType } from './TextToVoiceHandler'
+import { VoiceHandler } from './VoiceHandler'
 
 const commandsMap = new Map<string, string>()
 commandsMap.set('calabacon', 'cala-bacon-fera.mp3')
@@ -30,6 +30,23 @@ export class CommandHandler {
   async execute({ message, command }: CommandProps) {
     const assetName = commandsMap.get(command.replace('!', ''))
     const filePath = `${ASSETS_PATH}/${assetName}`
+
+    // read files from audio commands folder
+    if (!assetName) {
+      const audioCommandsFiles = fs.readdirSync(AUDIO_COMMANDS_ASSETS_PATH)
+
+      const commandFile = audioCommandsFiles.find((file) =>
+        file.includes(command.replace('!', ''))
+      )
+
+      if (commandFile) {
+        const filePath = `${AUDIO_COMMANDS_ASSETS_PATH}/${commandFile}`
+        const voiceHandler = new VoiceHandler()
+        voiceHandler.executeVoice(message, filePath)
+      }
+
+      return
+    }
 
     if (!filePath || !fs.existsSync(filePath)) return
 
