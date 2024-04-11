@@ -23,6 +23,7 @@
     "fluent-ffmpeg": "^2.1.2",
     "gtts": "^0.2.1",
     "libsodium-wrappers": "^0.7.11",
+    "music-metadata": "^7.14.0",
     "tsup": "^7.2.0",
     "tsx": "^3.12.8"
   },

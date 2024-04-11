@@ -1,10 +1,10 @@
 const gtts = require('gtts')
 // import AWS from 'aws-sdk'
-import fs from 'fs'
 import axios from 'axios'
-import { VoiceHandler } from './VoiceHandler'
 import { Message } from 'discord.js'
+import fs from 'fs'
 import { ASSETS_PATH } from '../constants'
+import { VoiceHandler } from './VoiceHandler'
 
 export enum VoiceType {
   AWS = 'aws',
@@ -36,9 +36,19 @@ export class TextToVoiceHandler {
   }
 
   getTextAsVoice = async (text: string, language = 'pt-br') => {
-    const speech = new gtts(text, language)
+    try {
+      const speech = new gtts(text, language)
 
-    return speech.save('./src/assets/audios/speech.mp3')
+      return speech.save('./src/assets/audios/speech.mp3')
+      
+    } catch (error: any) {
+      console.log('Error fetching the audio:', error.message)
+      if (`${error.message}`.includes('Language not supported') ) {
+        const speech = new gtts('Linguagem errada seu 🐊 e 🐞', 'es')
+
+        return speech.save('./src/assets/audios/speech.mp3')
+      }
+    }
   }
 
   getTextAsVoiceIA = async (text: string, language = 'pt-br') => {

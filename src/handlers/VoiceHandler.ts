@@ -1,18 +1,22 @@
-import Discord from 'discord.js'
 import {
-  VoiceConnectionStatus,
-  joinVoiceChannel,
-  createAudioPlayer,
-  NoSubscriberBehavior,
-  createAudioResource,
   AudioPlayerStatus,
-} from '@discordjs/voice'
-import { DEFAULT_ASSET_PATH } from '../constants'
+  NoSubscriberBehavior,
+  VoiceConnectionStatus,
+  createAudioPlayer,
+  createAudioResource,
+  joinVoiceChannel,
+} from '@discordjs/voice';
+import Discord from 'discord.js';
+import * as mm from 'music-metadata';
+import { DEFAULT_ASSET_PATH } from '../constants';
 
 export class VoiceHandler {
-  executeVoice = (message: Discord.Message, overrideFilePath?: string) => {
+  executeVoice = async (message: Discord.Message, overrideFilePath?: string) => {
     try {
       const filePath = overrideFilePath || DEFAULT_ASSET_PATH
+      
+      const metadata = await mm.parseFile(filePath);
+      const durationInMilliseconds = (metadata.format.duration || 0) * 1000;
 
       const channel =
         message.member?.voice.channel || ({} as Discord.VoiceBasedChannel)
@@ -43,6 +47,7 @@ export class VoiceHandler {
         })
 
         const resource = createAudioResource(filePath)
+        console.log('resource', resource)
         player.play(resource)
 
         const subscription = connection.subscribe(player)
@@ -51,13 +56,12 @@ export class VoiceHandler {
 
         player.on('stateChange', (state) => {
           if (state.status === AudioPlayerStatus.Playing) {
-            // console.log('stateChange', state)
+            console.log('stateChange', state)
 
-            const timeoutTime = state.playbackDuration || 3000
+            const timeoutTime = durationInMilliseconds || 3000
 
-            if (subscription) {
-              if (timeout) clearTimeout(timeout)
-              // Unsubscribe after 5 seconds (stop playing audio on the voice connection)
+            if (subscription && !timeout) {
+              // if (timeout) clearTimeout(timeout)
               timeout = setTimeout(() => {
                 console.log('clearing timeout')
                 subscription.unsubscribe()
