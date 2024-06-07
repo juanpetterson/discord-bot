@@ -20,6 +20,7 @@ export class TextToVoiceHandler {
   }
 
   execute = async (message: Message, text: string, language = 'pt-br') => {
+    console.log('DEBUG execute', this.voiceType)
     const textToSpeechMap = {
       [VoiceType.GTTS]: this.getTextAsVoice,
       [VoiceType.IA]: this.getTextAsVoiceIA,
@@ -119,17 +120,22 @@ export class TextToVoiceHandler {
     // }
   }
 
-  private saveAudioToFile = (
+  private saveAudioToFile = async (
     audioData: any,
     fileName = `${ASSETS_PATH}/speech.mp3`
   ) => {
     const buffer = Buffer.from(audioData, 'base64')
-    fs.writeFile(fileName, buffer, (err: any) => {
-      if (err) {
-        console.error('Error saving the audio to file:', err.message)
-      } else {
-        console.log('Audio saved to file:', fileName)
-      }
+
+    return new Promise((resolve, reject) => {
+      fs.writeFile(fileName, buffer, (err: any) => {
+        if (err) {
+          console.error('Error saving the audio to file:', err.message)
+          reject(err)
+        } else {
+          console.log('Audio saved to file:', fileName)
+          resolve(fileName)
+        }
+      })
     })
   }
 }
