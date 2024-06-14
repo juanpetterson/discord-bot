@@ -20,12 +20,12 @@ export class TextToVoiceHandler {
   }
 
   execute = async (message: Message, text: string, language = 'pt-br') => {
-    console.log('DEBUG execute', this.voiceType)
     const textToSpeechMap = {
       [VoiceType.GTTS]: this.getTextAsVoice,
       [VoiceType.IA]: this.getTextAsVoiceIA,
       [VoiceType.AWS]: this.getTextAsVoiceAWS,
     }
+
     const textToSpeech = textToSpeechMap[this.voiceType]
 
     if (!textToSpeech) return
@@ -64,7 +64,7 @@ export class TextToVoiceHandler {
 
     try {
       const response = await axios.post(
-        'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
+        'https://api.elevenlabs.io/v1/text-to-speech/xelqbzhlOpMIaGBHezBm',
         data,
         {
           headers: {
