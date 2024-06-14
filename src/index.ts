@@ -77,7 +77,11 @@ client.on('messageCreate', async (message: Message) => {
       return randomizeHeroes(message, +randomCount)
     }
 
-    if (messageContent.startsWith('!')) {
+    if (messageContent === '!langs') {
+      return postSupportedLanguages(message)
+    }
+
+    if (messageContent.startsWith('!') && messageContent !== '!langs' ) {
       commandHandler.execute({ message, command: messageContent })
     }
 
@@ -106,60 +110,7 @@ client.on('messageCreate', async (message: Message) => {
     console.log(error)
   }
 
-  // TODO move logic to a command handler
-  if (message.content.toLowerCase() === '!langs'.toLowerCase()) {
-    message.reply(`'af' : 'Afrikaans'
-    'sq' : 'Albanian'
-    'ar' : 'Arabic'
-    'hy' : 'Armenian'
-    'ca' : 'Catalan'
-    'zh' : 'Chinese',
-    'zh-cn' : 'Chinese (Mandarin/China)'
-    'zh-tw' : 'Chinese (Mandarin/Taiwan)'
-    'zh-yue' : 'Chinese (Cantonese)'
-    'hr' : 'Croatian'
-    'cs' : 'Czech'
-    'da' : 'Danish'
-    'nl' : 'Dutch'
-    'en' : 'English'
-    'en-au' : 'English (Australia)'
-    'en-uk' : 'English (United Kingdom)'
-    'en-us' : 'English (United States)'
-    'eo' : 'Esperanto'
-    'fi' : 'Finnish'
-    'fr' : 'French'
-    'de' : 'German'
-    'el' : 'Greek'
-    'ht' : 'Haitian Creole'
-    'hi' : 'Hindi'
-    'hu' : 'Hungarian'
-    'is' : 'Icelandic'
-    'id' : 'Indonesian'
-    'it' : 'Italian'
-    'ja' : 'Japanese'
-    'ko' : 'Korean'
-    'la' : 'Latin'
-    'lv' : 'Latvian'
-    'mk' : 'Macedonian'
-    'no' : 'Norwegian'
-    'pl' : 'Polish'
-    'pt' : 'Portuguese'
-    'pt-br' : 'Portuguese (Brazil)'
-    'ro' : 'Romanian'
-    'ru' : 'Russian'
-    'sr' : 'Serbian'
-    'sk' : 'Slovak'
-    'es' : 'Spanish'
-    'es-es' : 'Spanish (Spain)'
-    'es-us' : 'Spanish (United States)'
-    'sw' : 'Swahili'
-    'sv' : 'Swedish'
-    'ta' : 'Tamil'
-    'th' : 'Thai'
-    'tr' : 'Turkish'
-    'vi' : 'Vietnamese'
-    'cy' : 'Welsh'`)
-  }
+  console.log('messageConten2', message.content)
 })
 
 client.on('interactionCreate', async (interaction) => {
@@ -227,6 +178,60 @@ client.on('interactionCreate', async (interaction) => {
     channel?.send({ embeds: [exampleEmbed] })
   }
 })
+
+function postSupportedLanguages(message: Message) {
+  message.reply(`'af' : 'Afrikaans'
+    'sq' : 'Albanian'
+    'ar' : 'Arabic'
+    'hy' : 'Armenian'
+    'ca' : 'Catalan'
+    'zh' : 'Chinese',
+    'zh-cn' : 'Chinese (Mandarin/China)'
+    'zh-tw' : 'Chinese (Mandarin/Taiwan)'
+    'zh-yue' : 'Chinese (Cantonese)'
+    'hr' : 'Croatian'
+    'cs' : 'Czech'
+    'da' : 'Danish'
+    'nl' : 'Dutch'
+    'en' : 'English'
+    'en-au' : 'English (Australia)'
+    'en-uk' : 'English (United Kingdom)'
+    'en-us' : 'English (United States)'
+    'eo' : 'Esperanto'
+    'fi' : 'Finnish'
+    'fr' : 'French'
+    'de' : 'German'
+    'el' : 'Greek'
+    'ht' : 'Haitian Creole'
+    'hi' : 'Hindi'
+    'hu' : 'Hungarian'
+    'is' : 'Icelandic'
+    'id' : 'Indonesian'
+    'it' : 'Italian'
+    'ja' : 'Japanese'
+    'ko' : 'Korean'
+    'la' : 'Latin'
+    'lv' : 'Latvian'
+    'mk' : 'Macedonian'
+    'no' : 'Norwegian'
+    'pl' : 'Polish'
+    'pt' : 'Portuguese'
+    'pt-br' : 'Portuguese (Brazil)'
+    'ro' : 'Romanian'
+    'ru' : 'Russian'
+    'sr' : 'Serbian'
+    'sk' : 'Slovak'
+    'es' : 'Spanish'
+    'es-es' : 'Spanish (Spain)'
+    'es-us' : 'Spanish (United States)'
+    'sw' : 'Swahili'
+    'sv' : 'Swedish'
+    'ta' : 'Tamil'
+    'th' : 'Thai'
+    'tr' : 'Turkish'
+    'vi' : 'Vietnamese'
+    'cy' : 'Welsh'`)
+}
 
 export function getRandomHero(ignoreHeroes: Set<number> = new Set()) {
   const availableHeroes = heroes.filter((hero) => !ignoreHeroes.has(hero.id))
