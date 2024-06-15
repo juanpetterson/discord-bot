@@ -47,7 +47,6 @@ export class VoiceHandler {
         })
 
         const resource = createAudioResource(filePath)
-        console.log('resource', resource)
         player.play(resource)
 
         const subscription = connection.subscribe(player)
@@ -76,7 +75,7 @@ export class VoiceHandler {
         })
       })
     } catch (error) {
-      console.log('error on executeVoice')
+      console.log('DEBUG error on executeVoice')
     }
   }
 }

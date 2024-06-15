@@ -26,7 +26,7 @@ export class TextToVoiceHandler {
       [VoiceType.AWS]: this.getTextAsVoiceAWS,
     }
 
-    console.log('voiceType', this.voiceType)
+    console.log('DEBUG voiceType', this.voiceType)
 
     const textToSpeech = textToSpeechMap[this.voiceType]
 
@@ -39,13 +39,14 @@ export class TextToVoiceHandler {
   }
 
   getTextAsVoice = async (text: string, language = 'pt-br') => {
+    console.log('DEBUG DEBUG GTTS')
     try {
       const speech = new gtts(text, language)
 
       return speech.save('./src/assets/audios/speech.mp3')
       
     } catch (error: any) {
-      console.log('Error fetching the audio:', error.message)
+      console.log('DEBUG DEBUG GTTS Error fetching the audio:', error.message)
       if (`${error.message}`.includes('Language not supported') ) {
         const speech = new gtts('Linguagem errada seu 🐊 e 🐞', 'es')
 
@@ -55,7 +56,7 @@ export class TextToVoiceHandler {
   }
 
   getTextAsVoiceIA = async (text: string, language = 'pt-br') => {
-    console.log('IA')
+    console.log('DEBUG IA')
     const data = {
       text,
       model_id: 'eleven_monolingual_v1',
@@ -67,7 +68,7 @@ export class TextToVoiceHandler {
 
     try {
       const response = await axios.post(
-        'https://api.elevenlabs.io/v1/text-to-speech/xelqbzhlOpMIaGBHezBm',
+        'https://api.elevenlabs.io/v1/text-to-speech/7p1Ofvcwsv7UBPoFNcpI',
         data,
         {
           headers: {
@@ -82,7 +83,8 @@ export class TextToVoiceHandler {
 
       return this.saveAudioToFile(audioData)
     } catch (error: any) {
-      console.error('Error fetching the audio:', error.message)
+      console.log('Error fetching the audio:', error.message)
+      return ''
     }
   }
 
@@ -109,7 +111,7 @@ export class TextToVoiceHandler {
     //       } else if (data.AudioStream instanceof Buffer) {
     //         // Process the audio stream (data.AudioStream) as per your requirement
     //         // For example, you can save the audio to a file or play it in the browser
-    //         console.log('Audio generated successfully!')
+    //         console.log('DEBUG Audio generated successfully!')
     //         const audioData = Buffer.from(data.AudioStream, 'binary').toString(
     //           'base64'
     //         )
@@ -132,10 +134,10 @@ export class TextToVoiceHandler {
     return new Promise((resolve, reject) => {
       fs.writeFile(fileName, buffer, (err: any) => {
         if (err) {
-          console.error('Error saving the audio to file:', err.message)
+          console.log('DEBUG Error saving the audio to file:', err.message)
           reject(err)
         } else {
-          console.log('Audio saved to file:', fileName)
+          console.log('DEBUG Audio saved to file:', fileName)
           resolve(fileName)
         }
       })

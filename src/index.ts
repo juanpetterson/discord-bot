@@ -56,7 +56,7 @@ client.on('custom-message', (message: string) => {
 })
 
 client.on('messageCreate', async (message: Message) => {
-  console.log('message received')
+  console.log('DEBUG message received')
   try {
     const commandHandler = new CommandHandler()
     const messageContent = message.content.toLowerCase()
@@ -69,11 +69,11 @@ client.on('messageCreate', async (message: Message) => {
       if (!randomCount && !playerNames.length) return
 
       if (!Number.isInteger(+randomCount)) {
-        console.log('randomizeHeroes players')
+        console.log('DEBUG randomizeHeroes players')
         return randomizeHeroes(message, 0, playerNames)
       }
 
-      console.log('randomizeHeroes count')
+      console.log('DEBUG randomizeHeroes count')
       return randomizeHeroes(message, +randomCount)
     }
 
@@ -109,8 +109,6 @@ client.on('messageCreate', async (message: Message) => {
   } catch (error) {
     console.log(error)
   }
-
-  console.log('messageConten2', message.content)
 })
 
 client.on('interactionCreate', async (interaction) => {
