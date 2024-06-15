@@ -32,7 +32,8 @@ export class TextToVoiceHandler {
 
     if (!textToSpeech) return
 
-    await textToSpeech(text, language)
+    const filePath = await textToSpeech(text, language)
+    console.log('DEBUG filePath', filePath)
 
     const voiceHandler = new VoiceHandler()
     voiceHandler.executeVoice(message)
@@ -68,7 +69,7 @@ export class TextToVoiceHandler {
 
     try {
       const response = await axios.post(
-        'https://api.elevenlabs.io/v1/text-to-speech/7p1Ofvcwsv7UBPoFNcpI',
+        'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
         data,
         {
           headers: {
@@ -135,7 +136,7 @@ export class TextToVoiceHandler {
       fs.writeFile(fileName, buffer, (err: any) => {
         if (err) {
           console.log('DEBUG Error saving the audio to file:', err.message)
-          reject('')
+          resolve('')
         } else {
           console.log('DEBUG Audio saved to file:', fileName)
           resolve(fileName)
