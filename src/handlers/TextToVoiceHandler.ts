@@ -35,6 +35,8 @@ export class TextToVoiceHandler {
     const filePath = await textToSpeech(text, language)
     console.log('DEBUG filePath', filePath)
 
+    if (filePath) return;
+    
     const voiceHandler = new VoiceHandler()
     voiceHandler.executeVoice(message)
   }
