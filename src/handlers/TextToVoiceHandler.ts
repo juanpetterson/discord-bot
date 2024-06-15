@@ -39,14 +39,14 @@ export class TextToVoiceHandler {
   }
 
   getTextAsVoice = async (text: string, language = 'pt-br') => {
-    console.log('DEBUG DEBUG GTTS')
+    console.log('DEBUG GTTS')
     try {
       const speech = new gtts(text, language)
 
       return speech.save('./src/assets/audios/speech.mp3')
       
     } catch (error: any) {
-      console.log('DEBUG DEBUG GTTS Error fetching the audio:', error.message)
+      console.log('DEBUG GTTS Error fetching the audio:', error.message)
       if (`${error.message}`.includes('Language not supported') ) {
         const speech = new gtts('Linguagem errada seu 🐊 e 🐞', 'es')
 
@@ -83,7 +83,7 @@ export class TextToVoiceHandler {
 
       return this.saveAudioToFile(audioData)
     } catch (error: any) {
-      console.log('Error fetching the audio:', error.message)
+      console.log('DEBUG Error fetching the audio:', error.message)
       return ''
     }
   }
@@ -135,7 +135,7 @@ export class TextToVoiceHandler {
       fs.writeFile(fileName, buffer, (err: any) => {
         if (err) {
           console.log('DEBUG Error saving the audio to file:', err.message)
-          reject(err)
+          reject('')
         } else {
           console.log('DEBUG Audio saved to file:', fileName)
           resolve(fileName)

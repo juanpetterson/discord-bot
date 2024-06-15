@@ -55,7 +55,7 @@ export class VoiceHandler {
 
         player.on('stateChange', (state) => {
           if (state.status === AudioPlayerStatus.Playing) {
-            console.log('stateChange', state)
+            console.log('stateChange')
 
             const timeoutTime = durationInMilliseconds || 3000
 
