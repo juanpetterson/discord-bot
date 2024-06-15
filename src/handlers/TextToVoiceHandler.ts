@@ -26,6 +26,8 @@ export class TextToVoiceHandler {
       [VoiceType.AWS]: this.getTextAsVoiceAWS,
     }
 
+    console.log('voiceType', this.voiceType)
+
     const textToSpeech = textToSpeechMap[this.voiceType]
 
     if (!textToSpeech) return
@@ -53,6 +55,7 @@ export class TextToVoiceHandler {
   }
 
   getTextAsVoiceIA = async (text: string, language = 'pt-br') => {
+    console.log('IA')
     const data = {
       text,
       model_id: 'eleven_monolingual_v1',
