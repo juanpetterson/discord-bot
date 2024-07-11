@@ -24,15 +24,8 @@ export class VoiceHandler {
     try {
       const filePath = overrideFilePath || DEFAULT_ASSET_PATH
 
-      console.log('DEBUG filePath', filePath)
-      
       const metadata = await mm.parseFile(filePath);
       const durationInMilliseconds = (metadata.format.duration || 0) * 1000;
-
-      // const channel =
-      //   message.member?.voice.channel || ({} as Discord.VoiceBasedChannel)
-
-      VoiceHandler.connection = getVoiceConnection(channel.guild.id)
 
       if (!VoiceHandler.connection) {
         VoiceHandler.connection = joinVoiceChannel({
@@ -62,6 +55,20 @@ export class VoiceHandler {
 
         VoiceHandler.playSound(filePath, durationInMilliseconds)
       })
+
+      connection.on(VoiceConnectionStatus.Disconnected, () => {
+        console.log('DEBUG Disconnected')
+        VoiceHandler.connectionIsReady = false;
+        VoiceHandler.connection = undefined;
+      })
+
+      connection.on(VoiceConnectionStatus.Destroyed, () => {
+        console.log('DEBUG destroyed')
+        VoiceHandler.connectionIsReady = false;
+        VoiceHandler.connection = undefined;
+      })
+
+
     } catch (error) {
       console.log('DEBUG error on executeVoice')
     }

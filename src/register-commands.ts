@@ -111,6 +111,18 @@ const commands = [
       }
     ]
   },
+  {
+    name: 'delete',
+    description: 'Delete sound',
+    options: [
+      {
+        name: 'name',
+        type: 3,
+        description: 'Sound name',
+        required: true,
+      },
+    ]
+  },
 ]
 
 // Construct and prepare an instance of the REST module

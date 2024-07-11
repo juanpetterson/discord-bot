@@ -122,22 +122,22 @@ client.on('messageCreate', async (message: Message) => {
 })
 
 client.on('interactionCreate', async (interaction) => {
-  const optionsAttachment = interaction.options?._hoistedOptions?.[1]?.attachment
+  const interactionName = interaction?.commandName
+  const messageInteractionName = interaction?.message?.interaction?.commandName
   
-  if (optionsAttachment?.url) {
+  if (interactionName === 'upload') {
+    const optionsAttachment: {url: string, name: string } = interaction.options.getAttachment('audio-file')
+    // const optionsAttachment = interaction.options?._hoistedOptions?.[1]?.attachment
+    // interaction.options.getString('name')
+    // const audioName = interaction.options.getString('value')
     const audioName = interaction.options?._hoistedOptions?.[0].value
-    downloadMP3(optionsAttachment.url, './src/assets/uploads', audioName);
-    interaction.reply('Sound uploaded!')
+    await downloadMP3(optionsAttachment, './src/assets/uploads', audioName);
+    postAvailableSounds(interaction)
+    // interaction.reply('Sound uploaded!')
   }
 
-  const interactionName = interaction?.message?.interaction?.commandName
-
-  if (interactionName === 'sounds') {
+  if (messageInteractionName === 'sounds') {
     // ready file names from the assets/uploads folder
-    const sounds = fs.readdirSync('./src/assets/uploads')
-    console.log( 'DEBUG interactionCreate sounds', interaction.customId)
-    console.log( 'DEBUG interactionCreate sounds', sounds)
-
     VoiceHandler.player?.play
 
     const channel =
@@ -148,11 +148,9 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    const resource = createAudioResource(`./src/assets/uploads/${sounds[0]}`)
     const filePath = `./src/assets/uploads/${interaction.customId}`
     VoiceHandler.executeVoice(channel, filePath)
     interaction.deferUpdate('Playing sound!')
-    // VoiceHandler.player?.play(resource)
   }
 
   if (!interaction.isChatInputCommand() ) return
@@ -220,7 +218,18 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.commandName === 'sounds') {
-    // await interaction.reply('Available sounds')
+    postAvailableSounds(interaction)
+  }
+
+  if (interaction.commandName === 'delete') {
+    const deleteFileName = interaction.options.getString('name')
+    // TODO add to delete by index
+    const sounds = fs.readdirSync('./src/assets/uploads')
+    const soundFileName = sounds.find((sound) => sound.split('.')[0] === deleteFileName)
+
+
+    // remove file by name
+    fs.unlinkSync(`./src/assets/uploads/${soundFileName}`)
     postAvailableSounds(interaction)
   }
 })
@@ -367,31 +376,37 @@ export function randomizeHeroes(
 }
 
 // Function to download the MP3 file
-function downloadMP3(url: string, destinationFolder: string, fileName?: string) {
+async function downloadMP3(attachment:  {url: string, name: string }, destinationFolder: string, audioName: string) {
   // Ensure the destination folder exists
   if (!fs.existsSync(destinationFolder)) {
     fs.mkdirSync(destinationFolder, { recursive: true });
   }
-
-  const fileNameNew = fileName ? `${fileName}.mp3` : path.basename(url);
+  const { url, name } = attachment
+  const fileFormat = name.split('.').pop();
+  const fileNameNew = `${audioName}.${fileFormat}`;
   const destinationPath = path.join(destinationFolder, fileNameNew);
 
-  https.get(url, (response) => {
-    // Check if the request was successful
-    if (response.statusCode === 200) {
-      const fileStream = fs.createWriteStream(destinationPath);
-      response.pipe(fileStream);
-
-      fileStream.on('finish', () => {
-        fileStream.close();
-        console.log('Download completed:', destinationPath);
-      });
-    } else {
-      console.error('Failed to download file:', response.statusCode);
-    }
-  }).on('error', (err) => {
-    console.error('Error downloading the file:', err.message);
-  });
+  return new Promise((resolve, reject) => {
+    https.get(url, (response) => {
+      // Check if the request was successful
+      if (response.statusCode === 200) {
+        const fileStream = fs.createWriteStream(destinationPath);
+        response.pipe(fileStream);
+  
+        fileStream.on('finish', () => {
+          fileStream.close();
+          console.log('Download completed:', destinationPath);
+        });
+        resolve('Download completed');
+      } else {
+        console.error('Failed to download file:', response.statusCode);
+        reject(new Error('Failed to download file'));
+      }
+    }).on('error', (err) => {
+      console.error('Error downloading the file:', err.message);
+      reject(err);
+    });
+  })
 }
 
 keepAlive()
