@@ -151,7 +151,7 @@ client.on('interactionCreate', async (interaction) => {
     const resource = createAudioResource(`./src/assets/uploads/${sounds[0]}`)
     const filePath = `./src/assets/uploads/${interaction.customId}`
     VoiceHandler.executeVoice(channel, filePath)
-    interaction.reply('Playing sound')
+    interaction.deferUpdate('Playing sound!')
     // VoiceHandler.player?.play(resource)
   }
 
