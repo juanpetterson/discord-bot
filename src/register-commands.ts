@@ -89,6 +89,28 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'sounds',
+    description: 'List available sound on the bot',
+  },
+  {
+    name: 'upload',
+    description: 'Upload sound',
+    options: [
+      {
+        name: 'name',
+        type: 3,
+        description: 'Sound name',
+        required: true,
+      },
+      {
+        name: 'audio-file',
+        type: 11,
+        description: 'Audio file',
+        required: true
+      }
+    ]
+  },
 ]
 
 // Construct and prepare an instance of the REST module

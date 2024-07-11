@@ -1,7 +1,7 @@
 const gtts = require('gtts')
 // import AWS from 'aws-sdk'
 import axios from 'axios'
-import { Message } from 'discord.js'
+import { Message, VoiceBasedChannel } from 'discord.js'
 import fs from 'fs'
 import { ASSETS_PATH } from '../constants'
 import { VoiceHandler } from './VoiceHandler'
@@ -20,25 +20,27 @@ export class TextToVoiceHandler {
   }
 
   execute = async (message: Message, text: string, language = 'pt-br') => {
+    const channel =
+        message.member?.voice.channel || ({} as VoiceBasedChannel)
+
     const textToSpeechMap = {
       [VoiceType.GTTS]: this.getTextAsVoice,
       [VoiceType.IA]: this.getTextAsVoiceIA,
       [VoiceType.AWS]: this.getTextAsVoiceAWS,
     }
 
-    console.log('DEBUG voiceType', this.voiceType)
-
     const textToSpeech = textToSpeechMap[this.voiceType]
 
     if (!textToSpeech) return
 
     const filePath = await textToSpeech(text, language)
+
     console.log('DEBUG filePath', filePath)
 
-    if (filePath) return;
+    if (!filePath) return;
     
-    const voiceHandler = new VoiceHandler()
-    voiceHandler.executeVoice(message)
+    // const voiceHandler = new VoiceHandler()
+    VoiceHandler.executeVoice(channel)
   }
 
   getTextAsVoice = async (text: string, language = 'pt-br') => {
@@ -46,7 +48,17 @@ export class TextToVoiceHandler {
     try {
       const speech = new gtts(text, language)
 
-      return speech.save('./src/assets/audios/speech.mp3')
+      return new Promise((resolve, reject) => {
+        speech.save('./src/assets/audios/speech.mp3', (e) => {
+          if (e) {
+            console.log('DEBUG GTTS Error saving the audio:', e.message)
+            reject('')
+          }
+  
+          resolve('./src/assets/audios/speech.mp3')
+          console.log('DEBUG GTTS Audio saved to file:', './src/assets/audios/speech.mp3')
+        })
+      })
       
     } catch (error: any) {
       console.log('DEBUG GTTS Error fetching the audio:', error.message)
@@ -71,7 +83,7 @@ export class TextToVoiceHandler {
 
     try {
       const response = await axios.post(
-        'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
+        'https://api.elevenlabs.io/v1/text-to-speech/7p1Ofvcwsv7UBPoFNcpI',
         data,
         {
           headers: {

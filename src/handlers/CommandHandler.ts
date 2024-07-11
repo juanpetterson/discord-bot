@@ -1,4 +1,4 @@
-import { Message } from 'discord.js'
+import { Message, VoiceBasedChannel } from 'discord.js'
 import fs from 'fs'
 import { ASSETS_PATH, AUDIO_COMMANDS_ASSETS_PATH } from '../constants'
 import { TextToVoiceHandler, VoiceType } from './TextToVoiceHandler'
@@ -30,6 +30,8 @@ export class CommandHandler {
   async execute({ message, command }: CommandProps) {
     const assetName = commandsMap.get(command.replace('!', ''))
     const filePath = `${ASSETS_PATH}/${assetName}`
+    const channel =
+        message.member?.voice.channel || ({} as VoiceBasedChannel)
 
     // read files from audio commands folder
     if (!assetName) {
@@ -41,8 +43,8 @@ export class CommandHandler {
 
       if (commandFile) {
         const filePath = `${AUDIO_COMMANDS_ASSETS_PATH}/${commandFile}`
-        const voiceHandler = new VoiceHandler()
-        voiceHandler.executeVoice(message, filePath)
+        // const voiceHandler = new VoiceHandler()
+        VoiceHandler.executeVoice(channel, filePath)
       }
 
       return
@@ -50,8 +52,8 @@ export class CommandHandler {
 
     if (!filePath || !fs.existsSync(filePath)) return
 
-    const voiceHandler = new VoiceHandler()
-    voiceHandler.executeVoice(message, filePath)
+    // const voiceHandler = new VoiceHandler()
+    VoiceHandler.executeVoice(channel, filePath)
   }
 
   async executeTextToVoice({

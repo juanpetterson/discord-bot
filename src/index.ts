@@ -8,7 +8,15 @@ import {
   EmbedBuilder,
   CacheType,
   Interaction,
+  ButtonBuilder,
+  ButtonStyle,
+  ChatInputCommandInteraction,
+  ActionRowBuilder,
+  VoiceBasedChannel,
 } from 'discord.js'
+import fs from 'fs'
+import https from 'https';
+import path from 'path';
 import heroes from './assets/data/heroes.json'
 
 import { keepAlive } from './server'
@@ -16,6 +24,8 @@ import { CommandHandler } from './handlers/CommandHandler'
 import { VoiceType } from './handlers/TextToVoiceHandler'
 
 import { registerCommands } from './register-commands'
+import { VoiceHandler } from './handlers/VoiceHandler'
+import { createAudioResource } from '@discordjs/voice'
 
 const COLORS_SCHEME = {
   0: 0x3071f7,
@@ -81,7 +91,7 @@ client.on('messageCreate', async (message: Message) => {
       return postSupportedLanguages(message)
     }
 
-    if (messageContent.startsWith('!') && messageContent !== '!langs' ) {
+    if (messageContent.startsWith('!') && messageContent !== '!langs') {
       commandHandler.execute({ message, command: messageContent })
     }
 
@@ -112,7 +122,39 @@ client.on('messageCreate', async (message: Message) => {
 })
 
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return
+  const optionsAttachment = interaction.options?._hoistedOptions?.[1]?.attachment
+  
+  if (optionsAttachment?.url) {
+    const audioName = interaction.options?._hoistedOptions?.[0].value
+    downloadMP3(optionsAttachment.url, './src/assets/uploads', audioName);
+  }
+
+  const interactionName = interaction?.message?.interaction?.commandName
+
+  if (interactionName === 'sounds') {
+    // ready file names from the assets/uploads folder
+    const sounds = fs.readdirSync('./src/assets/uploads')
+    console.log( 'DEBUG interactionCreate sounds', interaction.customId)
+    console.log( 'DEBUG interactionCreate sounds', sounds)
+
+    VoiceHandler.player?.play
+
+    const channel =
+    interaction.member?.voice?.channel || ({} as VoiceBasedChannel)
+
+    if (!channel) {
+      console.log('DEBUG no channel')
+      return;
+    }
+
+    const resource = createAudioResource(`./src/assets/uploads/${sounds[0]}`)
+    const filePath = `./src/assets/uploads/${interaction.customId}`
+    VoiceHandler.executeVoice(channel, filePath)
+    interaction.reply('Playing sound')
+    // VoiceHandler.player?.play(resource)
+  }
+
+  if (!interaction.isChatInputCommand() ) return
 
   if (interaction.commandName === 'random') {
     await interaction.reply('------- Randomized Heroes -------')
@@ -175,7 +217,44 @@ client.on('interactionCreate', async (interaction) => {
 
     channel?.send({ embeds: [exampleEmbed] })
   }
+
+  if (interaction.commandName === 'sounds') {
+    // await interaction.reply('Available sounds')
+    postAvailableSounds(interaction)
+  }
 })
+
+async function postAvailableSounds(interaction) {
+  const sounds = fs.readdirSync('./src/assets/uploads')
+
+  const buttons = sounds.map((sound) => {
+    const label = sound.split('.')[0]
+
+    return new ButtonBuilder()
+      .setCustomId(sound)
+      .setLabel(label)
+      .setStyle(ButtonStyle.Primary)
+  })
+
+  const cancel = new ButtonBuilder()
+			.setCustomId('cancel')
+			.setLabel('Option 1')
+			.setStyle(ButtonStyle.Primary);
+
+  const confirm = new ButtonBuilder()
+			.setCustomId('confirm')
+			.setLabel('Option 2')
+			.setStyle(ButtonStyle.Primary);
+
+
+  const row = new ActionRowBuilder()
+    .addComponents([...buttons]);
+
+  await interaction.reply({
+    content: `Available sounds:`,
+    components: [row],
+  });
+}
 
 function postSupportedLanguages(message: Message) {
   message.reply(`'af' : 'Afrikaans'
@@ -295,6 +374,34 @@ export function randomizeHeroes(
   }
 
   channel?.send({ embeds: embedMessages })
+}
+
+// Function to download the MP3 file
+function downloadMP3(url: string, destinationFolder: string, fileName?: string) {
+  // Ensure the destination folder exists
+  if (!fs.existsSync(destinationFolder)) {
+    fs.mkdirSync(destinationFolder, { recursive: true });
+  }
+
+  const fileNameNew = fileName ? `${fileName}.mp3` : path.basename(url);
+  const destinationPath = path.join(destinationFolder, fileNameNew);
+
+  https.get(url, (response) => {
+    // Check if the request was successful
+    if (response.statusCode === 200) {
+      const fileStream = fs.createWriteStream(destinationPath);
+      response.pipe(fileStream);
+
+      fileStream.on('finish', () => {
+        fileStream.close();
+        console.log('Download completed:', destinationPath);
+      });
+    } else {
+      console.error('Failed to download file:', response.statusCode);
+    }
+  }).on('error', (err) => {
+    console.error('Error downloading the file:', err.message);
+  });
 }
 
 keepAlive()
