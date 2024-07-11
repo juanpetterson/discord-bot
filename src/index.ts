@@ -132,8 +132,7 @@ client.on('interactionCreate', async (interaction) => {
     // const audioName = interaction.options.getString('value')
     const audioName = interaction.options?._hoistedOptions?.[0].value
     await downloadMP3(optionsAttachment, './src/assets/uploads', audioName);
-    postAvailableSounds(interaction)
-    // interaction.reply('Sound uploaded!')
+    interaction.deferUpdate('Sound uploaded!')
   }
 
   if (messageInteractionName === 'sounds') {
