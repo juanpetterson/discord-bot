@@ -127,6 +127,7 @@ client.on('interactionCreate', async (interaction) => {
   if (optionsAttachment?.url) {
     const audioName = interaction.options?._hoistedOptions?.[0].value
     downloadMP3(optionsAttachment.url, './src/assets/uploads', audioName);
+    interaction.reply('Sound uploaded!')
   }
 
   const interactionName = interaction?.message?.interaction?.commandName
@@ -235,17 +236,6 @@ async function postAvailableSounds(interaction) {
       .setLabel(label)
       .setStyle(ButtonStyle.Primary)
   })
-
-  const cancel = new ButtonBuilder()
-			.setCustomId('cancel')
-			.setLabel('Option 1')
-			.setStyle(ButtonStyle.Primary);
-
-  const confirm = new ButtonBuilder()
-			.setCustomId('confirm')
-			.setLabel('Option 2')
-			.setStyle(ButtonStyle.Primary);
-
 
   const row = new ActionRowBuilder()
     .addComponents([...buttons]);
