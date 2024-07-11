@@ -133,12 +133,13 @@ client.on('interactionCreate', async (interaction) => {
     const audioName = interaction.options?._hoistedOptions?.[0].value
     await downloadMP3(optionsAttachment, './src/assets/uploads', audioName);
     interaction.reply('Sound uploaded!')
-    // TODO check why it's not working. interaction ?
+    // TODO check why it's not working. interaction when using the sound?
     // postAvailableSounds(interaction)
   }
 
   if (messageInteractionName === 'sounds') {
     // ready file names from the assets/uploads folder
+    // TODO check why it's not working when posted after adding sounds
     VoiceHandler.player?.play
 
     const channel =
@@ -247,12 +248,28 @@ async function postAvailableSounds(interaction) {
       .setStyle(ButtonStyle.Primary)
   })
 
-  const row = new ActionRowBuilder()
-    .addComponents([...buttons]);
+  const row = new ActionRowBuilder();
+  const rows = [row]
+
+  // for (let i = 0; i < buttons.length; i += 5) {
+  //   rows.push(buttons.slice(i, i + 5))
+  // }
+
+  
+  buttons.forEach((button, index) => {
+    if (index % 5 === 0 && index !== 0) {
+      rows.push(new ActionRowBuilder())
+    }
+
+    rows[rows.length - 1].addComponents(button)
+  })
+
+  // const row = new ActionRowBuilder()
+  //   .addComponents([...buttons]);
 
   await interaction.reply({
     content: `Available sounds:`,
-    components: [row],
+    components: [...rows],
   });
 }
 
