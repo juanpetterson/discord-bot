@@ -237,15 +237,21 @@ client.on('interactionCreate', async (interaction) => {
 })
 
 async function postAvailableSounds(interaction) {
+  const buttonStyles = [ButtonStyle.Primary,  ButtonStyle.Danger, ButtonStyle.Secondary, ButtonStyle.Success]
+  let styleIndex = 0
   const sounds = fs.readdirSync('./src/assets/uploads')
 
-  const buttons = sounds.map((sound) => {
+  const buttons = sounds.map((sound, index) => {
+    if (index  % 25 === 0) {
+      styleIndex++;
+    }
+
     const label = sound.split('.')[0]
 
     return new ButtonBuilder()
       .setCustomId(sound)
       .setLabel(label)
-      .setStyle(ButtonStyle.Primary)
+      .setStyle(buttonStyles[styleIndex])
   })
 
   const row = new ActionRowBuilder();
@@ -267,10 +273,33 @@ async function postAvailableSounds(interaction) {
   // const row = new ActionRowBuilder()
   //   .addComponents([...buttons]);
 
+  // a reply can contains only 5 rows
+  // separated replies for each 5 rows
+
+
+
+  // await interaction.reply({
+  //   content: `Available sounds:`,
+  //   components: [...rows],
+  // });
+  replyAvailableSounds(rows, interaction)
+}
+
+async function replyAvailableSounds(rows: ActionRowBuilder[], interaction: Interaction) {
+  // get the first 5 rows
+  // const currentRows = rows.slice(0, 5)
+  const currentRows = rows.splice(0, 5)
+
+
   await interaction.reply({
     content: `Available sounds:`,
-    components: [...rows],
+    components: [...currentRows],
   });
+
+  if (rows.length > 5) {
+    // call the function again with the remaining rows
+    replyAvailableSounds(rows, interaction)
+  }
 }
 
 function postSupportedLanguages(message: Message) {
