@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  your-service:
+    image: discord-bot-sound
+    ports:
+      - "8080:8080"
+    volumes:
+      - type: bind
+        source: ./src/assets/uploads
+        target: /app/src/assets/uploads

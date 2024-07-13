@@ -25,7 +25,8 @@ import { VoiceType } from './handlers/TextToVoiceHandler'
 
 import { registerCommands } from './register-commands'
 import { VoiceHandler } from './handlers/VoiceHandler'
-import { createAudioResource } from '@discordjs/voice'
+
+const MAX_COMPONENTS_COUNT = 1;
 
 const COLORS_SCHEME = {
   0: 0x3071f7,
@@ -242,7 +243,7 @@ async function postAvailableSounds(interaction) {
   const sounds = fs.readdirSync('./src/assets/uploads')
 
   const buttons = sounds.map((sound, index) => {
-    if (index  % 25 === 0) {
+    if (index % 25 === 0 && index !== 0) {
       styleIndex++;
     }
 
@@ -256,49 +257,47 @@ async function postAvailableSounds(interaction) {
 
   const row = new ActionRowBuilder();
   const rows = [row]
-
-  // for (let i = 0; i < buttons.length; i += 5) {
-  //   rows.push(buttons.slice(i, i + 5))
-  // }
-
   
   buttons.forEach((button, index) => {
-    if (index % 5 === 0 && index !== 0) {
+    if (index % MAX_COMPONENTS_COUNT === 0 && index !== 0) {
       rows.push(new ActionRowBuilder())
     }
 
     rows[rows.length - 1].addComponents(button)
   })
 
-  // const row = new ActionRowBuilder()
-  //   .addComponents([...buttons]);
+  console.log('DEBUG postAvailableSounds rows', rows.length)
 
-  // a reply can contains only 5 rows
-  // separated replies for each 5 rows
-
-
-
-  // await interaction.reply({
-  //   content: `Available sounds:`,
-  //   components: [...rows],
-  // });
   replyAvailableSounds(rows, interaction)
 }
 
-async function replyAvailableSounds(rows: ActionRowBuilder[], interaction: Interaction) {
+async function replyAvailableSounds(rows: ActionRowBuilder[], interaction: Interaction, alreadyReply = false) {
   // get the first 5 rows
   // const currentRows = rows.slice(0, 5)
   const currentRows = rows.splice(0, 5)
 
+  console.log('DEBUG replyAvailableSounds rows', rows.length)
 
-  await interaction.reply({
-    content: `Available sounds:`,
-    components: [...currentRows],
-  });
 
-  if (rows.length > 5) {
+  // reply only if it's the last 5 rows
+  if (rows.length === 0 || alreadyReply) {
+    console.log('DEBUG last rows')
+     await interaction.followUp({
+      content: `Available sounds:`,
+      components: [...currentRows]
+    });
+  } else {
+    // post message with the first 5 rows to the message channel
+    console.log('DEBUG more rows')
+    await interaction.reply({
+      content: `Available sounds:`,
+      components: [...currentRows]
+    })
+  }
+
+  if (rows.length > 0) {
     // call the function again with the remaining rows
-    replyAvailableSounds(rows, interaction)
+    replyAvailableSounds(rows, interaction, true)
   }
 }
 
