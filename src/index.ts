@@ -26,7 +26,7 @@ import { VoiceType } from './handlers/TextToVoiceHandler'
 import { registerCommands } from './register-commands'
 import { VoiceHandler } from './handlers/VoiceHandler'
 
-const MAX_COMPONENTS_COUNT = 1;
+const MAX_COMPONENTS_COUNT = 5;
 
 const COLORS_SCHEME = {
   0: 0x3071f7,
