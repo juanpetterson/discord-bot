@@ -133,12 +133,15 @@ client.on('interactionCreate', async (interaction) => {
     // const audioName = interaction.options.getString('value')
     const audioName = interaction.options?._hoistedOptions?.[0].value
     await downloadMP3(optionsAttachment, './src/assets/uploads', audioName);
-    interaction.reply('Sound uploaded!')
+    // interaction.reply('Sound uploaded!')
     // TODO check why it's not working. interaction when using the sound?
-    // postAvailableSounds(interaction)
+    postAvailableSounds(interaction)
   }
 
-  if (messageInteractionName === 'sounds') {
+  
+  const isButtonInteraction = interaction.isButton()
+
+  if (messageInteractionName === 'sounds' || isButtonInteraction) {
     // ready file names from the assets/uploads folder
     // TODO check why it's not working when posted after adding sounds
     VoiceHandler.player?.play
@@ -266,8 +269,6 @@ async function postAvailableSounds(interaction) {
     rows[rows.length - 1].addComponents(button)
   })
 
-  console.log('DEBUG postAvailableSounds rows', rows.length)
-
   replyAvailableSounds(rows, interaction)
 }
 
@@ -276,19 +277,14 @@ async function replyAvailableSounds(rows: ActionRowBuilder[], interaction: Inter
   // const currentRows = rows.slice(0, 5)
   const currentRows = rows.splice(0, 5)
 
-  console.log('DEBUG replyAvailableSounds rows', rows.length)
-
-
   // reply only if it's the last 5 rows
   if (rows.length === 0 || alreadyReply) {
-    console.log('DEBUG last rows')
      await interaction.followUp({
       content: `Available sounds:`,
       components: [...currentRows]
     });
   } else {
     // post message with the first 5 rows to the message channel
-    console.log('DEBUG more rows')
     await interaction.reply({
       content: `Available sounds:`,
       components: [...currentRows]
