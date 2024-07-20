@@ -13,7 +13,8 @@ import {
   ChatInputCommandInteraction,
   ActionRowBuilder,
   VoiceBasedChannel,
-  Events
+  Events,
+  GuildMember
 } from 'discord.js'
 import fs from 'fs'
 import https from 'https';
@@ -66,6 +67,19 @@ client.on('custom-message', (message: string) => {
   if (!channel) return
 
   channel.send(message)
+})
+
+client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
+  console.log('DEBUG debug', newState.channelId)
+  const channelId = newState.channelId || oldState.channelId
+
+  const channel = client.channels.cache.get(channelId) as any
+  const membersNames = channel.members.map((member: GuildMember) => member.user.username);
+  
+  if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
+    VoiceHandler.connection?.destroy()
+    VoiceHandler.connection = undefined
+  }
 })
 
 client.on('messageCreate', async (message: Message) => {
