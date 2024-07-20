@@ -16,6 +16,7 @@ import { get } from 'http';
 
 export class VoiceHandler {
   static connection: VoiceConnection | null | undefined = null
+  static connectionChannelId: string | null | undefined = null
   static player: AudioPlayer | null | undefined = null
   static subscription: any
   static connectionIsReady = false;
@@ -27,12 +28,21 @@ export class VoiceHandler {
       const metadata = await mm.parseFile(filePath);
       const durationInMilliseconds = (metadata.format.duration || 0) * 1000;
 
+      if (VoiceHandler.connectionChannelId !== channel.id) {
+        if (VoiceHandler.connection) {
+          VoiceHandler.connection.destroy()
+          VoiceHandler.connection = undefined
+        }
+      }
+
       if (!VoiceHandler.connection) {
         VoiceHandler.connection = joinVoiceChannel({
           channelId: channel.id,
           guildId: channel.guild.id,
           adapterCreator: channel.guild.voiceAdapterCreator as any,
         })
+
+        VoiceHandler.connectionChannelId = channel.id
       }
 
       const connection = VoiceHandler.connection
