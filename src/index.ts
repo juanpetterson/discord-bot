@@ -13,6 +13,7 @@ import {
   ChatInputCommandInteraction,
   ActionRowBuilder,
   VoiceBasedChannel,
+  Events
 } from 'discord.js'
 import fs from 'fs'
 import https from 'https';
@@ -27,6 +28,7 @@ import { registerCommands } from './register-commands'
 import { VoiceHandler } from './handlers/VoiceHandler'
 
 const MAX_COMPONENTS_COUNT = 5;
+const MAX_COMPONENTS_ROW_COLUMN_COUNT = MAX_COMPONENTS_COUNT * MAX_COMPONENTS_COUNT;
 
 const COLORS_SCHEME = {
   0: 0x3071f7,
@@ -128,13 +130,8 @@ client.on('interactionCreate', async (interaction) => {
   
   if (interactionName === 'upload') {
     const optionsAttachment: {url: string, name: string } = interaction.options.getAttachment('audio-file')
-    // const optionsAttachment = interaction.options?._hoistedOptions?.[1]?.attachment
-    // interaction.options.getString('name')
-    // const audioName = interaction.options.getString('value')
     const audioName = interaction.options?._hoistedOptions?.[0].value
     await downloadMP3(optionsAttachment, './src/assets/uploads', audioName);
-    // interaction.reply('Sound uploaded!')
-    // TODO check why it's not working. interaction when using the sound?
     postAvailableSounds(interaction)
   }
 
@@ -143,7 +140,6 @@ client.on('interactionCreate', async (interaction) => {
 
   if (messageInteractionName === 'sounds' || isButtonInteraction) {
     // ready file names from the assets/uploads folder
-    // TODO check why it's not working when posted after adding sounds
     VoiceHandler.player?.play
 
     const channel =
@@ -245,16 +241,23 @@ async function postAvailableSounds(interaction) {
   let styleIndex = 0
   const sounds = fs.readdirSync('./src/assets/uploads')
 
+  const soundFileMaxNameSize = sounds.map((sound) => sound.split('.')[0]).reduce((max, current) => Math.max(max, current.length), 0)
+
   const buttons = sounds.map((sound, index) => {
     if (index % 25 === 0 && index !== 0) {
       styleIndex++;
     }
 
     const label = sound.split('.')[0]
+    const leftSize = Math.floor((soundFileMaxNameSize - label.length ) / 2)
+    const completeCharacter = 'ㅤ'
+
+    let buttonName = label.padStart(((leftSize / 2) + label.length), completeCharacter);
+    buttonName = buttonName.padEnd(soundFileMaxNameSize - leftSize, completeCharacter);
 
     return new ButtonBuilder()
       .setCustomId(sound)
-      .setLabel(label)
+      .setLabel(`${buttonName}`)
       .setStyle(buttonStyles[styleIndex])
   })
 
@@ -277,14 +280,16 @@ async function replyAvailableSounds(rows: ActionRowBuilder[], interaction: Inter
   // const currentRows = rows.slice(0, 5)
   const currentRows = rows.splice(0, 5)
 
-  // reply only if it's the last 5 rows
-  if (rows.length === 0 || alreadyReply) {
+  
+  if (alreadyReply) {
+    console.log('DEBUG followUp', rows.length, alreadyReply)
      await interaction.followUp({
       content: `Available sounds:`,
       components: [...currentRows]
     });
   } else {
-    // post message with the first 5 rows to the message channel
+    console.log('DEBUG reply', rows.length, alreadyReply)
+    
     await interaction.reply({
       content: `Available sounds:`,
       components: [...currentRows]
