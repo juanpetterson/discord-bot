@@ -70,10 +70,10 @@ client.on('custom-message', (message: string) => {
 })
 
 client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
-  console.log('DEBUG debug', newState.channelId)
-  const channelId = newState.channelId || oldState.channelId
+  const channel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any
 
-  const channel = client.channels.cache.get(channelId) as any
+  if (!channel) return
+
   const membersNames = channel.members.map((member: GuildMember) => member.user.username);
   
   if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
