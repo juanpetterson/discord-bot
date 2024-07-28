@@ -77,8 +77,7 @@ client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
   const membersNames = channel.members.map((member: GuildMember) => member.user.username);
   
   if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
-    VoiceHandler.connection?.destroy()
-    VoiceHandler.connection = undefined
+    VoiceHandler.destroyConnection();
   }
 })
 
@@ -260,6 +259,9 @@ async function postAvailableSounds(interaction) {
   const buttons = sounds.map((sound, index) => {
     if (index % 25 === 0 && index !== 0) {
       styleIndex++;
+      if (styleIndex >= buttonStyles.length) {
+        styleIndex = 0
+      }
     }
 
     const label = sound.split('.')[0]
@@ -290,17 +292,11 @@ async function postAvailableSounds(interaction) {
 }
 
 async function replyAvailableSounds(rows: ActionRowBuilder[], interaction: Interaction, alreadyReply = false) {
-  // get the first 5 rows
-  // const currentRows = rows.slice(0, 5)
   const currentRows = rows.splice(0, 5)
 
-  
   if (alreadyReply) {
     console.log('DEBUG followUp', rows.length, alreadyReply)
-     await interaction.followUp({
-      content: `Available sounds:`,
-      components: [...currentRows]
-    });
+    interaction.channel?.send({ components: ([...currentRows.map(row => row.toJSON())]) as any })
   } else {
     console.log('DEBUG reply', rows.length, alreadyReply)
     
