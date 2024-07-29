@@ -12,7 +12,7 @@ import {
 import type Discord from 'discord.js';
 import * as mm from 'music-metadata';
 import { DEFAULT_ASSET_PATH } from '../constants';
-import { get } from 'http';
+// import { QueueHandler } from './QueueHandler';
 
 export class VoiceHandler {
   static connection: VoiceConnection | null | undefined = null
@@ -20,6 +20,14 @@ export class VoiceHandler {
   static player: AudioPlayer | null | undefined = null
   static subscription: any
   static connectionIsReady = false;
+  static playerStatus: AudioPlayerStatus | undefined
+
+  static destroyConnection = () => {
+    VoiceHandler.connection?.destroy()
+    VoiceHandler.connection = undefined
+    VoiceHandler.connectionChannelId = undefined
+    VoiceHandler.connectionIsReady = false
+  }
 
   static executeVoice = async (channel: Discord.VoiceBasedChannel, overrideFilePath?: string) => {
     try {
@@ -27,13 +35,13 @@ export class VoiceHandler {
 
       const metadata = await mm.parseFile(filePath);
       const durationInMilliseconds = (metadata.format.duration || 0) * 1000;
+      const channelId = channel?.id;
 
-      if (VoiceHandler.connectionChannelId !== channel.id && !!(channel?.id)) {
-        if (VoiceHandler.connection) {
-          VoiceHandler.connection.destroy()
-          VoiceHandler.connection = undefined
-        }
+      if (VoiceHandler.connectionChannelId !== channelId && !!(channelId)) {
+        VoiceHandler.destroyConnection();
       }
+
+      if (!channelId) return;
 
       if (!VoiceHandler.connection) {
         VoiceHandler.connection = joinVoiceChannel({
@@ -67,15 +75,11 @@ export class VoiceHandler {
       })
 
       connection.on(VoiceConnectionStatus.Disconnected, () => {
-        console.log('DEBUG Disconnected')
-        VoiceHandler.connectionIsReady = false;
-        VoiceHandler.connection = undefined;
+        VoiceHandler.destroyConnection();
       })
 
       connection.on(VoiceConnectionStatus.Destroyed, () => {
-        console.log('DEBUG destroyed')
-        VoiceHandler.connectionIsReady = false;
-        VoiceHandler.connection = undefined;
+        VoiceHandler.destroyConnection();
       })
 
 
@@ -133,6 +137,18 @@ export class VoiceHandler {
       VoiceHandler.subscription = connection.subscribe(player)
 
       let timeout: NodeJS.Timeout
+
+      // player.on('stateChange', (oldState, state) => {
+      //   VoiceHandler.playerStatus = state.status;
+      //   if (state.status === AudioPlayerStatus.Idle) {
+      //     const queueHandler = new QueueHandler();
+      //     const queueItem = queueHandler.dequeue();
+
+      //     if (queueItem) {
+      //       VoiceHandler.executeVoice(queueItem.channel, queueItem.filePath)
+      //     }
+      //   }
+      // })
 
       // player.on('stateChange', (state) => {
       //   if (state.status === AudioPlayerStatus.Playing) {
