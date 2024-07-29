@@ -23,10 +23,14 @@ export class VoiceHandler {
   static playerStatus: AudioPlayerStatus | undefined
 
   static destroyConnection = () => {
-    VoiceHandler.connection?.destroy()
-    VoiceHandler.connection = undefined
-    VoiceHandler.connectionChannelId = undefined
-    VoiceHandler.connectionIsReady = false
+    try {
+      VoiceHandler.connection?.destroy()
+      VoiceHandler.connection = undefined
+      VoiceHandler.connectionChannelId = undefined
+      VoiceHandler.connectionIsReady = false
+    } catch (error) {
+      console.log('DEBUG error on destroyConnection', error)
+    }
   }
 
   static executeVoice = async (channel: Discord.VoiceBasedChannel, overrideFilePath?: string) => {
