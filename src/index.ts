@@ -27,6 +27,9 @@ import { VoiceType } from './handlers/TextToVoiceHandler'
 
 import { registerCommands } from './register-commands'
 import { VoiceHandler } from './handlers/VoiceHandler'
+// import { QueueHandler } from './handlers/QueueHandler';
+
+import { calculateTextWidth } from './utils'
 
 const MAX_COMPONENTS_COUNT = 5;
 const MAX_COMPONENTS_ROW_COLUMN_COUNT = MAX_COMPONENTS_COUNT * MAX_COMPONENTS_COUNT;
@@ -164,7 +167,14 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const filePath = `./src/assets/uploads/${interaction.customId}`
-    VoiceHandler.executeVoice(channel, filePath)
+    // const queueHandler = new QueueHandler();
+    
+    // if (VoiceHandler.playerStatus === 'playing' || VoiceHandler.playerStatus === 'buffering') {
+    //   queueHandler.add({ channel: channel, filePath })
+    // } else {
+      VoiceHandler.executeVoice(channel, filePath)
+    // }
+
     interaction.deferUpdate('Playing sound!')
   }
 
@@ -250,65 +260,113 @@ client.on('interactionCreate', async (interaction) => {
 })
 
 async function postAvailableSounds(interaction) {
+  // TODO add prefix to separate audio voices Ex. pinga, jack, etc. Add the prefix on the command to upload
+  // TODO add rename command
+  // TODO post each voice with a color and post the voice name
+  // TODO sort by sound name
+  // TODO create get sound prefix
   const buttonStyles = [ButtonStyle.Primary,  ButtonStyle.Danger, ButtonStyle.Secondary, ButtonStyle.Success]
   let styleIndex = 0
   const sounds = fs.readdirSync('./src/assets/uploads')
 
   const soundFileMaxNameSize = sounds.map((sound) => sound.split('.')[0]).reduce((max, current) => Math.max(max, current.length), 0)
+  let previousPrefix = ''
 
-  const buttons = sounds.map((sound, index) => {
-    if (index % 25 === 0 && index !== 0) {
+  const prefixButtons: {
+    [key: string]: ButtonBuilder[]
+  } = {};
+
+  sounds.forEach((sound, index) => {
+    const prefixExists = sound.indexOf(' - ') !== -1
+    const prefix = prefixExists ? sound.split(' - ')[0] : 'geral'
+    
+    if (previousPrefix !== prefix && previousPrefix !== '') {
       styleIndex++;
       if (styleIndex >= buttonStyles.length) {
         styleIndex = 0
       }
     }
 
-    const label = sound.split('.')[0]
+    let label = sound.split('.')[0]
+    label = label.split(' - ')[1] || label
     const leftSize = Math.floor((soundFileMaxNameSize - label.length ) / 2)
     const completeCharacter = 'ㅤ'
-
+    
+    console.log(`DEBUG Sound: ${label} prefix: `, prefix)
+    
     let buttonName = label.padStart(((leftSize / 2) + label.length), completeCharacter);
     buttonName = buttonName.padEnd(soundFileMaxNameSize - leftSize, completeCharacter);
-
-    return new ButtonBuilder()
+        
+    previousPrefix = prefix
+    const button = new ButtonBuilder()
       .setCustomId(sound)
       .setLabel(`${buttonName}`)
       .setStyle(buttonStyles[styleIndex])
-  })
 
-  const row = new ActionRowBuilder();
-  const rows = [row]
-  
-  buttons.forEach((button, index) => {
-    if (index % MAX_COMPONENTS_COUNT === 0 && index !== 0) {
-      rows.push(new ActionRowBuilder())
+    if (prefix) {
+      if (!prefixButtons[prefix]) {
+        prefixButtons[prefix] = []
+      }
+      prefixButtons[prefix].push(button)
+    } else {
+      prefixButtons['geral'] = prefixButtons['geral'] || []
+      prefixButtons['geral'].push(button)
     }
-
-    rows[rows.length - 1].addComponents(button)
   })
 
-  replyAvailableSounds(rows, interaction)
+  Object.keys(prefixButtons).forEach((prefix, index) => {
+    const buttons = prefixButtons[prefix]
+    const row = new ActionRowBuilder();
+    const rows = [row]
+    let previousButtonPrefix = ''
+
+    buttons.forEach((button, index) => {
+      const buttonData: { custom_id: string } =  button.data 
+      const buttonPrefixExists = buttonData.custom_id.indexOf(' - ') !== -1
+      const buttonPrefix = buttonPrefixExists ? button.data.custom_id.split(' - ')[0] : 'geral'
+
+      console.log( 'DEBUG buttons sound', buttonPrefix, buttonPrefixExists)
+      // if (index % MAX_COMPONENTS_COUNT === 0 && index !== 0) {
+      if (index % MAX_COMPONENTS_COUNT === 0 && index !== 0 || (previousButtonPrefix !== buttonPrefix && previousButtonPrefix !== '')) {
+        rows.push(new ActionRowBuilder())
+      }
+
+      rows[rows.length - 1].addComponents(button)
+      previousButtonPrefix = buttonPrefix
+    })
+
+    replyAvailableSounds(rows, interaction, index > 0, prefix || 'geral')
+  })
+  
+
 }
 
-async function replyAvailableSounds(rows: ActionRowBuilder[], interaction: Interaction, alreadyReply = false) {
+async function replyAvailableSounds(rows: ActionRowBuilder[], interaction: Interaction, alreadyReply = false, prefix = '', isSamePrefix = false) {
   const currentRows = rows.splice(0, 5)
+
+  // const rowCustomId = currentRows?.[0].components[0].data.custom_id
+
+  // console.log('DEBUG replyAvailableSounds', rowCustomId)
 
   if (alreadyReply) {
     console.log('DEBUG followUp', rows.length, alreadyReply)
-    interaction.channel?.send({ components: ([...currentRows.map(row => row.toJSON())]) as any })
+    if (!isSamePrefix) {
+      interaction.channel?.send({ content: prefix, components: ([...currentRows.map(row => row.toJSON())]) as any })
+    } else {
+      interaction.channel?.send({ components: ([...currentRows.map(row => row.toJSON())]) as any })
+    }
   } else {
     console.log('DEBUG reply', rows.length, alreadyReply)
     
     await interaction.reply({
-      content: `Available sounds:`,
+      content: prefix,
       components: [...currentRows]
     })
   }
 
   if (rows.length > 0) {
     // call the function again with the remaining rows
-    replyAvailableSounds(rows, interaction, true)
+    replyAvailableSounds(rows, interaction, true, prefix, true)
   }
 }
 
