@@ -98,6 +98,12 @@ const commands = [
     description: 'Upload sound',
     options: [
       {
+        name: 'autor',
+        type: 3,
+        description: 'Sound autor',
+        required: true,
+      },
+      {
         name: 'name',
         type: 3,
         description: 'Sound name',

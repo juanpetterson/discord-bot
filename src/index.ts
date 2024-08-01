@@ -33,6 +33,7 @@ import { calculateTextWidth } from './utils'
 
 const MAX_COMPONENTS_COUNT = 5;
 const MAX_COMPONENTS_ROW_COLUMN_COUNT = MAX_COMPONENTS_COUNT * MAX_COMPONENTS_COUNT;
+const PREFIX_SEPARATOR = ' - '
 
 const COLORS_SCHEME = {
   0: 0x3071f7,
@@ -146,8 +147,9 @@ client.on('interactionCreate', async (interaction) => {
   
   if (interactionName === 'upload') {
     const optionsAttachment: {url: string, name: string } = interaction.options.getAttachment('audio-file')
-    const audioName = interaction.options?._hoistedOptions?.[0].value
-    await downloadMP3(optionsAttachment, './src/assets/uploads', audioName);
+    const audioName = interaction.options.getString('name')
+    const audioAutor = interaction.options.getString('autor')
+    await downloadMP3(optionsAttachment, './src/assets/uploads', `${audioAutor}${PREFIX_SEPARATOR}${audioName}`);
     postAvailableSounds(interaction)
   }
 
@@ -272,46 +274,58 @@ async function postAvailableSounds(interaction) {
   const soundFileMaxNameSize = sounds.map((sound) => sound.split('.')[0]).reduce((max, current) => Math.max(max, current.length), 0)
   let previousPrefix = ''
 
+  const prefixSounds: {
+    [key: string]: string[]
+  } = {}
+
+  sounds.forEach((sound, index) => {
+    const prefixExists = sound.indexOf(PREFIX_SEPARATOR) !== -1
+    const prefix = prefixExists ? sound.split(PREFIX_SEPARATOR)[0] : 'geral'
+
+    if (!prefixSounds[prefix]) {
+      prefixSounds[prefix] = []
+    }
+
+    prefixSounds[prefix].push(sound)
+  })
+
+
   const prefixButtons: {
     [key: string]: ButtonBuilder[]
   } = {};
 
-  sounds.forEach((sound, index) => {
-    const prefixExists = sound.indexOf(' - ') !== -1
-    const prefix = prefixExists ? sound.split(' - ')[0] : 'geral'
+
+
+  Object.entries(prefixSounds).forEach(([prefix, sounds]) => {
+    // const prefixExists = sound.indexOf(' - ') !== -1
+    // const prefix = prefixExists ? sound.split(' - ')[0] : 'geral'
     
-    if (previousPrefix !== prefix && previousPrefix !== '') {
-      styleIndex++;
-      if (styleIndex >= buttonStyles.length) {
-        styleIndex = 0
-      }
+    if (styleIndex >= buttonStyles.length) {
+      styleIndex = 0
     }
 
-    let label = sound.split('.')[0]
-    label = label.split(' - ')[1] || label
-    const leftSize = Math.floor((soundFileMaxNameSize - label.length ) / 2)
-    const completeCharacter = 'ㅤ'
-    
-    console.log(`DEBUG Sound: ${label} prefix: `, prefix)
-    
-    let buttonName = label.padStart(((leftSize / 2) + label.length), completeCharacter);
-    buttonName = buttonName.padEnd(soundFileMaxNameSize - leftSize, completeCharacter);
-        
-    previousPrefix = prefix
-    const button = new ButtonBuilder()
-      .setCustomId(sound)
-      .setLabel(`${buttonName}`)
-      .setStyle(buttonStyles[styleIndex])
-
-    if (prefix) {
+    sounds.forEach((sound, index) => {
+      let label = sound.split('.')[0]
+      label = label.split(PREFIX_SEPARATOR)[1] || label
+      const leftSize = Math.floor((soundFileMaxNameSize - label.length ) / 2)
+      const completeCharacter = 'ㅤ'
+      
+      let buttonName = label.padStart(((leftSize / 2) + label.length), completeCharacter);
+      buttonName = buttonName.padEnd(soundFileMaxNameSize - leftSize, completeCharacter);
+          
+      const button = new ButtonBuilder()
+        .setCustomId(sound)
+        .setLabel(`${buttonName}`)
+        .setStyle(buttonStyles[styleIndex])
+  
       if (!prefixButtons[prefix]) {
         prefixButtons[prefix] = []
       }
+
       prefixButtons[prefix].push(button)
-    } else {
-      prefixButtons['geral'] = prefixButtons['geral'] || []
-      prefixButtons['geral'].push(button)
-    }
+    })
+
+    styleIndex++;
   })
 
   Object.keys(prefixButtons).forEach((prefix, index) => {
@@ -322,8 +336,8 @@ async function postAvailableSounds(interaction) {
 
     buttons.forEach((button, index) => {
       const buttonData: { custom_id: string } =  button.data 
-      const buttonPrefixExists = buttonData.custom_id.indexOf(' - ') !== -1
-      const buttonPrefix = buttonPrefixExists ? button.data.custom_id.split(' - ')[0] : 'geral'
+      const buttonPrefixExists = buttonData.custom_id.indexOf(PREFIX_SEPARATOR) !== -1
+      const buttonPrefix = buttonPrefixExists ? button.data.custom_id.split(PREFIX_SEPARATOR)[0] : 'geral'
 
       console.log( 'DEBUG buttons sound', buttonPrefix, buttonPrefixExists)
       // if (index % MAX_COMPONENTS_COUNT === 0 && index !== 0) {
