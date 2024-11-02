@@ -14,7 +14,8 @@ import {
   ActionRowBuilder,
   VoiceBasedChannel,
   Events,
-  GuildMember
+  GuildMember,
+  GuildMemberManager
 } from 'discord.js'
 import fs from 'fs'
 import https from 'https';
@@ -73,17 +74,40 @@ client.on('custom-message', (message: string) => {
   channel.send(message)
 })
 
-client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
-  const channel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any
+// client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
+//   const channel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any;
 
-  if (!channel) return
+//   if (!channel) return;
 
-  const membersNames = channel.members.map((member: GuildMember) => member.user.username);
-  
-  if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
-    VoiceHandler.destroyConnection();
-  }
-})
+//   const membersNames = channel.members.map((member: GuildMember) => member.user.username);
+
+//   // Check if the user has left the channel
+//   if (oldState.channelId && !newState.channelId) {
+//     console.log(`${oldState.member?.user.username} has left the channel`);
+//   }
+
+//   // Check if the user has joined the channel
+//   if (!oldState.channelId && newState.channelId) {
+//     console.log(`${newState.member?.user.username} has joined the channel`);
+//   }
+
+//   if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
+//     VoiceHandler.destroyConnection();
+//   }
+
+//   // Execute trompete sound file when the members size increase
+//   if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
+//     VoiceHandler.executeVoice(channel, './src/assets/uploads/geral - trompete.mp3');
+//   }
+
+//   const oldStateMembers = (oldState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
+//   const newStateMembers = (newState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
+
+//   console.log('DEBUG oldState channelId:', oldState.channelId);
+//   console.log('DEBUG newState channelId:', newState.channelId);
+//   console.log('DEBUG oldState members:', oldStateMembers);
+//   console.log('DEBUG newState members:', newStateMembers);
+// });
 
 client.on('messageCreate', async (message: Message) => {
   console.log('DEBUG message received')
@@ -250,7 +274,6 @@ client.on('interactionCreate', async (interaction) => {
 
   if (interaction.commandName === 'delete') {
     const deleteFileName = interaction.options.getString('name')
-    // TODO add to delete by index
     const sounds = fs.readdirSync('./src/assets/uploads')
     const soundFileName = sounds.find((sound) => sound.split('.')[0] === deleteFileName)
 
@@ -262,18 +285,11 @@ client.on('interactionCreate', async (interaction) => {
 })
 
 async function postAvailableSounds(interaction) {
-  // TODO add prefix to separate audio voices Ex. pinga, jack, etc. Add the prefix on the command to upload
-  // TODO add rename command
-  // TODO post each voice with a color and post the voice name
-  // TODO sort by sound name
-  // TODO create get sound prefix
   const buttonStyles = [ButtonStyle.Primary,  ButtonStyle.Danger, ButtonStyle.Secondary, ButtonStyle.Success]
   let styleIndex = 0
   const sounds = fs.readdirSync('./src/assets/uploads')
 
   const soundFileMaxNameSize = sounds.map((sound) => sound.split('.')[0]).reduce((max, current) => Math.max(max, current.length), 0)
-  let previousPrefix = ''
-
   const prefixSounds: {
     [key: string]: string[]
   } = {}
@@ -297,9 +313,6 @@ async function postAvailableSounds(interaction) {
 
 
   Object.entries(prefixSounds).forEach(([prefix, sounds]) => {
-    // const prefixExists = sound.indexOf(' - ') !== -1
-    // const prefix = prefixExists ? sound.split(' - ')[0] : 'geral'
-    
     if (styleIndex >= buttonStyles.length) {
       styleIndex = 0
     }
@@ -328,29 +341,32 @@ async function postAvailableSounds(interaction) {
     styleIndex++;
   })
 
-  Object.keys(prefixButtons).forEach((prefix, index) => {
-    const buttons = prefixButtons[prefix]
-    const row = new ActionRowBuilder();
-    const rows = [row]
-    let previousButtonPrefix = ''
-
-    buttons.forEach((button, index) => {
-      const buttonData: { custom_id: string } =  button.data 
-      const buttonPrefixExists = buttonData.custom_id.indexOf(PREFIX_SEPARATOR) !== -1
-      const buttonPrefix = buttonPrefixExists ? button.data.custom_id.split(PREFIX_SEPARATOR)[0] : 'geral'
-
-      console.log( 'DEBUG buttons sound', buttonPrefix, buttonPrefixExists)
-      // if (index % MAX_COMPONENTS_COUNT === 0 && index !== 0) {
-      if (index % MAX_COMPONENTS_COUNT === 0 && index !== 0 || (previousButtonPrefix !== buttonPrefix && previousButtonPrefix !== '')) {
-        rows.push(new ActionRowBuilder())
-      }
-
-      rows[rows.length - 1].addComponents(button)
-      previousButtonPrefix = buttonPrefix
-    })
-
-    replyAvailableSounds(rows, interaction, index > 0, prefix || 'geral')
-  })
+  async function processButtons() {
+    for (const [index, prefix] of Object.keys(prefixButtons).entries()) {
+      const buttons = prefixButtons[prefix];
+      const row = new ActionRowBuilder();
+      const rows = [row];
+      let previousButtonPrefix = '';
+  
+      buttons.forEach((button, index) => {
+        const buttonData: { custom_id: string } = button.data;
+        const buttonPrefixExists = buttonData.custom_id.indexOf(PREFIX_SEPARATOR) !== -1;
+        const buttonPrefix = buttonPrefixExists ? button.data.custom_id.split(PREFIX_SEPARATOR)[0] : 'geral';
+  
+        console.log('DEBUG buttons sound', buttonPrefix, buttonPrefixExists);
+        if (index % MAX_COMPONENTS_COUNT === 0 && index !== 0 || (previousButtonPrefix !== buttonPrefix && previousButtonPrefix !== '')) {
+          rows.push(new ActionRowBuilder());
+        }
+  
+        rows[rows.length - 1].addComponents(button);
+        previousButtonPrefix = buttonPrefix;
+      });
+  
+      await replyAvailableSounds(rows, interaction, index > 0, prefix || 'geral');
+    }
+  }
+  
+  processButtons();
   
 
 }
@@ -493,8 +509,6 @@ export function randomizeHeroes(
       .setThumbnail(
         `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hero.name}.png`
       )
-
-    // add joke after player name
 
     exampleEmbed.setDescription(`Extra ${i + 1}`)
 

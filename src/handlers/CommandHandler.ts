@@ -37,9 +37,11 @@ export class CommandHandler {
     if (!assetName) {
       const audioCommandsFiles = fs.readdirSync(AUDIO_COMMANDS_ASSETS_PATH)
 
-      const commandFile = audioCommandsFiles.find((file) =>
-        file.includes(command.replace('!', ''))
-      )
+      const commandFile = audioCommandsFiles.find((file) => {
+        const fileName = file.split('.')[0]
+
+         return fileName === command.replace('!', '')
+      })
 
       if (commandFile) {
         const filePath = `${AUDIO_COMMANDS_ASSETS_PATH}/${commandFile}`
