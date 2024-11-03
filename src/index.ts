@@ -74,40 +74,40 @@ client.on('custom-message', (message: string) => {
   channel.send(message)
 })
 
-// client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
-//   const channel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any;
+client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
+  const channel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any;
 
-//   if (!channel) return;
+  if (!channel) return;
 
-//   const membersNames = channel.members.map((member: GuildMember) => member.user.username);
+  const membersNames = channel.members.map((member: GuildMember) => member.user.username);
 
-//   // Check if the user has left the channel
-//   if (oldState.channelId && !newState.channelId) {
-//     console.log(`${oldState.member?.user.username} has left the channel`);
-//   }
+  // Check if the user has left the channel
+  // if (oldState.channelId && !newState.channelId) {
+  //   console.log(`${oldState.member?.user.username} has left the channel`);
+  // }
 
-//   // Check if the user has joined the channel
-//   if (!oldState.channelId && newState.channelId) {
-//     console.log(`${newState.member?.user.username} has joined the channel`);
-//   }
+  // // Check if the user has joined the channel
+  // if (!oldState.channelId && newState.channelId) {
+  //   console.log(`${newState.member?.user.username} has joined the channel`);
+  // }
 
-//   if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
-//     VoiceHandler.destroyConnection();
-//   }
+  if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
+    VoiceHandler.destroyConnection();
+  }
 
-//   // Execute trompete sound file when the members size increase
-//   if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
-//     VoiceHandler.executeVoice(channel, './src/assets/uploads/geral - trompete.mp3');
-//   }
+  // Execute trompete sound file when the members size increase
+  // if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
+  //   VoiceHandler.executeVoice(channel, './src/assets/uploads/geral - trompete.mp3');
+  // }
 
-//   const oldStateMembers = (oldState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
-//   const newStateMembers = (newState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
+  // const oldStateMembers = (oldState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
+  // const newStateMembers = (newState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
 
-//   console.log('DEBUG oldState channelId:', oldState.channelId);
-//   console.log('DEBUG newState channelId:', newState.channelId);
-//   console.log('DEBUG oldState members:', oldStateMembers);
-//   console.log('DEBUG newState members:', newStateMembers);
-// });
+  // console.log('DEBUG oldState channelId:', oldState.channelId);
+  // console.log('DEBUG newState channelId:', newState.channelId);
+  // console.log('DEBUG oldState members:', oldStateMembers);
+  // console.log('DEBUG newState members:', newStateMembers);
+});
 
 client.on('messageCreate', async (message: Message) => {
   console.log('DEBUG message received')
