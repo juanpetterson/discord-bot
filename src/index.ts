@@ -288,13 +288,14 @@ async function postAvailableSounds(interaction) {
   const buttonStyles = [ButtonStyle.Primary,  ButtonStyle.Danger, ButtonStyle.Secondary, ButtonStyle.Success]
   let styleIndex = 0
   const sounds = fs.readdirSync('./src/assets/uploads')
+  const sortedSounds = sounds.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
   const soundFileMaxNameSize = sounds.map((sound) => sound.split('.')[0]).reduce((max, current) => Math.max(max, current.length), 0)
   const prefixSounds: {
     [key: string]: string[]
   } = {}
 
-  sounds.forEach((sound, index) => {
+  sortedSounds.forEach((sound, index) => {
     const prefixExists = sound.indexOf(PREFIX_SEPARATOR) !== -1
     const prefix = prefixExists ? sound.split(PREFIX_SEPARATOR)[0] : 'geral'
 
