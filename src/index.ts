@@ -135,6 +135,10 @@ client.on('messageCreate', async (message: Message) => {
       return postSupportedLanguages(message)
     }
 
+    if (messageContent === '!farm') {
+      return postImage(message, 'binho-farm')
+    }
+
     if (messageContent.startsWith('!') && messageContent !== '!langs') {
       commandHandler.execute({ message, command: messageContent })
     }
@@ -453,6 +457,16 @@ function postSupportedLanguages(message: Message) {
     'tr' : 'Turkish'
     'vi' : 'Vietnamese'
     'cy' : 'Welsh'`)
+}
+
+function postImage(message: Message, imageName: string ) {
+  const filePath = `./src/assets/images/${imageName}.png`
+  const fileExists = fs.existsSync(filePath)
+
+  if (!fileExists) return
+
+  const image = filePath
+  message.channel.send({ files: [image] })
 }
 
 export function getRandomHero(ignoreHeroes: Set<number> = new Set()) {
