@@ -139,6 +139,14 @@ client.on('messageCreate', async (message: Message) => {
       return postImage(message, 'binho-farm')
     }
 
+    if (messageContent === '!boadw') {
+      return postImage(message, 'boadw')
+    }
+
+    if (messageContent === '!ué') {
+      return postImage(message, 'uejack')
+    }
+
     if (messageContent.startsWith('!') && messageContent !== '!langs') {
       commandHandler.execute({ message, command: messageContent })
     }
@@ -461,6 +469,16 @@ function postSupportedLanguages(message: Message) {
 
 function postImage(message: Message, imageName: string ) {
   const filePath = `./src/assets/images/${imageName}.png`
+  const fileExists = fs.existsSync(filePath)
+
+  if (!fileExists) return
+
+  const image = filePath
+  message.channel.send({ files: [image] })
+}
+
+function postGIF(message: Message, gifName: string ) {
+  const filePath = `./src/assets/gifs/${gifName}.gif`
   const fileExists = fs.existsSync(filePath)
 
   if (!fileExists) return
