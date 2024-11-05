@@ -140,11 +140,11 @@ client.on('messageCreate', async (message: Message) => {
     }
 
     if (messageContent === '!boadw') {
-      return postImage(message, 'boadw')
+      return postGIF(message, 'boadw')
     }
 
     if (messageContent === '!ué') {
-      return postImage(message, 'uejack')
+      return postGIF(message, 'uejack')
     }
 
     if (messageContent.startsWith('!') && messageContent !== '!langs') {
