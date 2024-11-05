@@ -147,6 +147,10 @@ client.on('messageCreate', async (message: Message) => {
       return postGIF(message, 'uejack')
     }
 
+    if (messageContent === '!combadw') {
+      return postGIF(message, 'combadw')
+    }
+
     if (messageContent.startsWith('!') && messageContent !== '!langs') {
       commandHandler.execute({ message, command: messageContent })
     }
