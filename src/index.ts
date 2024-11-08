@@ -147,6 +147,10 @@ client.on('messageCreate', async (message: Message) => {
       return postGIF(message, 'uejack')
     }
 
+    if (messageContent === '!ué2') {
+      return postGIF(message, 'uedw')
+    }
+
     if (messageContent === '!combadw') {
       return postGIF(message, 'combadw')
     }
