@@ -1,10 +1,16 @@
 version: '3.8'
+
 services:
-  your-service:
-    image: discord-bot-sound
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     volumes:
-      - type: bind
-        source: ./src/assets/uploads
-        target: /app/src/assets/uploads
+      - ./src/assets/uploads:/app/src/assets/uploads
+      - ./src/assets/gifs:/app/src/assets/gifs
+    env_file:
+      - .env
+    command: ["npm", "run", "start"]
+    restart: on-failure
