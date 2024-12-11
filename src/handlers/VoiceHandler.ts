@@ -88,7 +88,7 @@ export class VoiceHandler {
 
 
     } catch (error) {
-      console.log('DEBUG error on executeVoice')
+      console.log('DEBUG error on executeVoice', error)
     }
   }
 

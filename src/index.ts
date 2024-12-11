@@ -15,7 +15,8 @@ import {
   VoiceBasedChannel,
   Events,
   GuildMember,
-  GuildMemberManager
+  GuildMemberManager,
+  VoiceState
 } from 'discord.js'
 import fs from 'fs'
 import https from 'https';
@@ -50,6 +51,17 @@ const COLORS_SCHEME_EXTRA = {
   2: 0x0000ff,
 }
 
+const USER_JOINED_CHANNEL_SOUNDS = {
+  'carlesso2154': 'geral - trompete.mp3',
+  'jacksonmajolo': 'geral - pode mamar.mp3',
+  'gbonassina': 'gre - ó o je me empurrando.ogg',
+  'cristiano.bonassina': 'cris - boooa gurizada.mp3',
+  'eradim': 'rafiki - aiiiii gre.ogg',
+  'wellfb': 'sido - ja tem tornado ja de novo.ogg',
+  'dedableo': 'dw - um bilhao de dano.mp3',
+  'juanpetterson.': 'binho - aiii rurrroor.ogg',
+}
+
 export const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -74,16 +86,23 @@ client.on('custom-message', (message: string) => {
   channel.send(message)
 })
 
-client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
-  const channel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any;
+client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) => {
+  const channel = client.channels.cache.get(newState.channelId || '') as any;
 
+  // console.log('DEBUG oldState:', oldState);
+  const memberJoinedUsername = newState.member?.user.username;
+  
   if (!channel) return;
 
-  const membersNames = channel.members.map((member: GuildMember) => member.user.username);
+  const membersNames = channel.members.map((member: GuildMember) => member.user);
 
   // Check if the user has left the channel
   // if (oldState.channelId && !newState.channelId) {
   //   console.log(`${oldState.member?.user.username} has left the channel`);
+  // }
+
+  // if (oldState.channelId && !newState.channelId) {
+  //   console.log(`${newState.member?.user.username} has left the channel`);
   // }
 
   // // Check if the user has joined the channel
@@ -96,9 +115,13 @@ client.on(Events.VoiceStateUpdate, (oldState: any, newState: any) => {
   }
 
   // Execute trompete sound file when the members size increase
-  // if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
-  //   VoiceHandler.executeVoice(channel, './src/assets/uploads/geral - trompete.mp3');
-  // }
+  if (memberJoinedUsername) {
+    const soundName = USER_JOINED_CHANNEL_SOUNDS[memberJoinedUsername as keyof typeof USER_JOINED_CHANNEL_SOUNDS];
+    const fileExists = fs.existsSync(`./src/assets/uploads/${soundName}`);
+    if (soundName && fileExists) {
+      VoiceHandler.executeVoice(channel, `./src/assets/uploads/${soundName}`);
+    }
+  }
 
   // const oldStateMembers = (oldState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
   // const newStateMembers = (newState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
@@ -188,7 +211,9 @@ client.on('messageCreate', async (message: Message) => {
 client.on('interactionCreate', async (interaction) => {
   const interactionName = interaction?.commandName
   const messageInteractionName = interaction?.message?.interaction?.commandName
-  
+
+  console.log('DEBUG interaction:', interaction.user.username)
+
   if (interactionName === 'upload') {
     const optionsAttachment: {url: string, name: string } = interaction.options.getAttachment('audio-file')
     const audioName = interaction.options.getString('name')
