@@ -90,8 +90,6 @@ client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) 
   const channel = client.channels.cache.get(newState.channelId || '') as any;
   const botChannel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any;
 
-  // console.log('DEBUG oldState:', oldState);
-  const memberJoinedUsername = newState.member?.user.username;
   
   // Destroy connection when bot is alone in the channel
   if (botChannel) {
@@ -101,12 +99,15 @@ client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) 
     }
   }
 
-  // Execute trompete sound file when the members size increase
-  if (channel && memberJoinedUsername) {
-    const soundName = USER_JOINED_CHANNEL_SOUNDS[memberJoinedUsername as keyof typeof USER_JOINED_CHANNEL_SOUNDS];
-    const fileExists = fs.existsSync(`./src/assets/uploads/${soundName}`);
-    if (soundName && fileExists) {
-      VoiceHandler.executeVoice(channel, `./src/assets/uploads/${soundName}`);
+  if (oldState.channelId === null && newState.channelId !== null) {
+    const user = newState.member?.user;
+    if (user) {
+      console.log(`${user.username} has joined the voice channel ${newState.channel?.name}`);
+      const soundName = USER_JOINED_CHANNEL_SOUNDS[user.username as keyof typeof USER_JOINED_CHANNEL_SOUNDS];
+      const fileExists = fs.existsSync(`./src/assets/uploads/${soundName}`);
+      if (soundName && fileExists) {
+        VoiceHandler.executeVoice(channel, `./src/assets/uploads/${soundName}`);
+      }
     }
   }
 });
