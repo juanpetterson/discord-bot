@@ -88,48 +88,27 @@ client.on('custom-message', (message: string) => {
 
 client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) => {
   const channel = client.channels.cache.get(newState.channelId || '') as any;
+  const botChannel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any;
 
   // console.log('DEBUG oldState:', oldState);
   const memberJoinedUsername = newState.member?.user.username;
   
-  if (!channel) return;
-
-  const membersNames = channel.members.map((member: GuildMember) => member.user.username);
-
-  // Check if the user has left the channel
-  // if (oldState.channelId && !newState.channelId) {
-  //   console.log(`${oldState.member?.user.username} has left the channel`);
-  // }
-
-  // if (oldState.channelId && !newState.channelId) {
-  //   console.log(`${newState.member?.user.username} has left the channel`);
-  // }
-
-  // // Check if the user has joined the channel
-  // if (!oldState.channelId && newState.channelId) {
-  //   console.log(`${newState.member?.user.username} has joined the channel`);
-  // }
-
-  if (channel.members.size === 1 && membersNames.includes('MACACKSOUND')) {
-    VoiceHandler.destroyConnection();
+  // Destroy connection when bot is alone in the channel
+  if (botChannel) {
+    const botChannelMembersNames = botChannel.members.map((member: GuildMember) => member.user.username);
+    if (botChannel.members.size === 1 && botChannelMembersNames.includes('MACACKSOUND')) {
+      VoiceHandler.destroyConnection();
+    }
   }
 
   // Execute trompete sound file when the members size increase
-  if (memberJoinedUsername) {
+  if (channel && memberJoinedUsername) {
     const soundName = USER_JOINED_CHANNEL_SOUNDS[memberJoinedUsername as keyof typeof USER_JOINED_CHANNEL_SOUNDS];
     const fileExists = fs.existsSync(`./src/assets/uploads/${soundName}`);
     if (soundName && fileExists) {
       VoiceHandler.executeVoice(channel, `./src/assets/uploads/${soundName}`);
     }
   }
-
-  // const oldStateMembers = (oldState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
-  // const newStateMembers = (newState.guild?.members as GuildMemberManager).cache.map((member) => member.user.username);
-
-  // console.log('DEBUG oldState channelId:', oldState.channelId);
-  // console.log('DEBUG newState channelId:', newState.channelId);
-  // console.log('DEBUG oldState members:', oldStateMembers);
-  // console.log('DEBUG newState members:', newStateMembers);
 });
 
 client.on('messageCreate', async (message: Message) => {
