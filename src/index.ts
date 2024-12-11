@@ -94,7 +94,7 @@ client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) 
   
   if (!channel) return;
 
-  const membersNames = channel.members.map((member: GuildMember) => member.user);
+  const membersNames = channel.members.map((member: GuildMember) => member.user.username);
 
   // Check if the user has left the channel
   // if (oldState.channelId && !newState.channelId) {
