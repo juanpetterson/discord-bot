@@ -134,6 +134,21 @@ client.on('messageCreate', async (message: Message) => {
       return randomizeHeroes(message, +randomCount)
     }
 
+    if (messageContent.startsWith('!play')) {
+      const args = messageContent.split(' ')
+      const soundName = args[1]
+      const sounds = fs.readdirSync('./src/assets/uploads')
+      const soundFileName = sounds.find((sound) => sound.split('.')[0].includes(soundName))
+
+      if (!soundFileName) return
+
+      const channel = message.member?.voice?.channel
+
+      if (!channel) return
+
+      VoiceHandler.executeVoice(channel, `./src/assets/uploads/${soundFileName}`)
+    }
+
     if (messageContent === '!langs') {
       return postSupportedLanguages(message)
     }
