@@ -136,7 +136,7 @@ client.on('messageCreate', async (message: Message) => {
 
     if (messageContent.startsWith('!play')) {
       const args = messageContent.split(' ')
-      const soundName = args[1]
+      const soundName = args.slice(1).join(' ')
       const sounds = fs.readdirSync('./src/assets/uploads')
       const soundFileName = sounds.find((sound) => sound.split('.')[0].includes(soundName))
 
