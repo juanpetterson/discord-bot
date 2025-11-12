@@ -6,26 +6,27 @@
   "scripts": {
     "build": "tsup src",
     "start": "node dist/index.js",
-    "dev": "tsx  watch src/index.ts"
+    "dev": "npx tsx watch src/index.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@discordjs/opus": "^0.4.0",
-    "@discordjs/voice": "^0.16.0",
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.18.0",
     "axios": "^0.21.1",
     "discord.js": "^14.14.1",
     "dotenv": "^8.2.0",
     "express": "^4.18.2",
     "ffmpeg": "0.0.4",
-    "ffmpeg-static": "^4.2.8",
+    "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.2",
     "gtts": "^0.2.1",
     "libsodium-wrappers": "^0.7.11",
     "music-metadata": "^7.14.0",
+    "opusscript": "^0.0.8",
     "tsup": "^7.2.0",
-    "tsx": "^3.12.8"
+    "tsx": "^4.19.1"
   },
   "devDependencies": {
     "@types/axios": "^0.14.0",

@@ -1,5 +1,46 @@
 require('dotenv').config()
 
+// Set FFmpeg path for discord.js voice BEFORE importing discord.js
+// @ts-ignore
+import ffmpegPath from 'ffmpeg-static';
+const pathModule = require('path');
+
+// Patch prism-media's FFmpeg detection
+const prismMedia = require('prism-media');
+if (ffmpegPath) {
+  // Normalize the path to handle Windows paths correctly
+  const normalizedPath = pathModule.normalize(ffmpegPath);
+  console.log('FFmpeg path found:', normalizedPath);
+  
+  const originalGetInfo = prismMedia.FFmpeg.getInfo;
+  prismMedia.FFmpeg.getInfo = function(force = false) {
+    if (!force && prismMedia.FFmpeg._cachedInfo) {
+      return prismMedia.FFmpeg._cachedInfo;
+    }
+    
+    // Test if FFmpeg actually works
+    const { spawnSync } = require('child_process');
+    let output = 'FFmpeg static build';
+    try {
+      const result = spawnSync(normalizedPath, ['-version'], { windowsHide: true });
+      if (result.stdout) {
+        output = result.stdout.toString();
+      }
+    } catch (e) {
+      console.error('FFmpeg test failed:', e);
+    }
+    
+    const info = {
+      command: normalizedPath,
+      output: output,
+      version: '4.4.1'
+    };
+    prismMedia.FFmpeg._cachedInfo = info;
+    console.log('Returning patched FFmpeg info with command:', info.command);
+    return info;
+  };
+}
+
 import {
   Client,
   GatewayIntentBits,

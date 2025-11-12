@@ -123,7 +123,9 @@ export class VoiceHandler {
         console.error(`Error: ${error.message} with resource`)
       })
 
-      const resource = createAudioResource(filePath)
+      const resource = createAudioResource(filePath, {
+        inlineVolume: true
+      })
       console.log('DEBUG player play')
       player.play(resource)
 
@@ -176,7 +178,7 @@ export class VoiceHandler {
       // })
     }
     catch (error) {
-      console.log('DEBUG error on playSound')
+      console.log('DEBUG error on playSound', error)
     }
   }
 }
