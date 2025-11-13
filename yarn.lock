@@ -259,6 +259,31 @@
   resolved "https://registry.npmjs.org/@sapphire/snowflake/-/snowflake-3.5.1.tgz"
   integrity sha512-BxcYGzgEsdlG0dKAyOm0ehLGm2CafIrfQTZGWgkfKYbj+pNNsorZ7EotuZukc2MT70E0UbppVbtpBrqpzVzjNA==
 
+"@snazzah/davey-win32-x64-msvc@0.1.7":
+  version "0.1.7"
+  resolved "https://registry.npmjs.org/@snazzah/davey-win32-x64-msvc/-/davey-win32-x64-msvc-0.1.7.tgz"
+  integrity sha512-Z2NhImUYeApi/lNn7MBcn14dPa2dtgnp5taz43JDaPpl+2cinDm9kYjpFzJE9SZMlfsa//p2dhE9B8TEVi9bHQ==
+
+"@snazzah/davey@^0.1.7":
+  version "0.1.7"
+  resolved "https://registry.npmjs.org/@snazzah/davey/-/davey-0.1.7.tgz"
+  integrity sha512-qBWp9sHf9vvKqDhg2AGOgWjB9q7MZat2CAPIcaXe+XFWl7nCmriRnDcdIRy7CwKWK+ECiuO29/RSxxKuulo28w==
+  optionalDependencies:
+    "@snazzah/davey-android-arm-eabi" "0.1.7"
+    "@snazzah/davey-android-arm64" "0.1.7"
+    "@snazzah/davey-darwin-arm64" "0.1.7"
+    "@snazzah/davey-darwin-x64" "0.1.7"
+    "@snazzah/davey-freebsd-x64" "0.1.7"
+    "@snazzah/davey-linux-arm-gnueabihf" "0.1.7"
+    "@snazzah/davey-linux-arm64-gnu" "0.1.7"
+    "@snazzah/davey-linux-arm64-musl" "0.1.7"
+    "@snazzah/davey-linux-x64-gnu" "0.1.7"
+    "@snazzah/davey-linux-x64-musl" "0.1.7"
+    "@snazzah/davey-wasm32-wasi" "0.1.7"
+    "@snazzah/davey-win32-arm64-msvc" "0.1.7"
+    "@snazzah/davey-win32-ia32-msvc" "0.1.7"
+    "@snazzah/davey-win32-x64-msvc" "0.1.7"
+
 "@tokenizer/token@^0.3.0":
   version "0.3.0"
   resolved "https://registry.npmjs.org/@tokenizer/token/-/token-0.3.0.tgz"
