@@ -71,6 +71,13 @@ import { VoiceType } from './handlers/TextToVoiceHandler'
 import { registerCommands } from './register-commands'
 import { VoiceHandler } from './handlers/VoiceHandler'
 // import { QueueHandler } from './handlers/QueueHandler';
+import { MatchHandler } from './handlers/MatchHandler'
+import { RandomKickHandler } from './handlers/RandomKickHandler'
+import { VoteKickHandler } from './handlers/VoteKickHandler'
+import { QuoteHandler } from './handlers/QuoteHandler'
+import { RoastHandler } from './handlers/RoastHandler'
+import { PollHandler } from './handlers/PollHandler'
+import { BetHandler } from './handlers/BetHandler'
 
 import { calculateTextWidth } from './utils'
 
@@ -158,6 +165,157 @@ client.on('messageCreate', async (message: Message) => {
   try {
     const commandHandler = new CommandHandler()
     const messageContent = message.content.toLowerCase()
+
+    // ===== NEW FEATURES =====
+
+    // Last Match Recap: !match <steam_id>
+    if (messageContent.startsWith('!match ')) {
+      const steamId = message.content.split(' ').slice(1).join(' ').trim()
+      if (steamId) {
+        await MatchHandler.getLastMatch(message, steamId)
+        return
+      }
+      message.reply('Usage: `!match <steam_id>`')
+      return
+    }
+
+    // Russian Roulette: !randomckick
+    if (messageContent === '!randomckick') {
+      await RandomKickHandler.execute(message)
+      return
+    }
+
+    // Vote Kick: !votekick <nickname>
+    if (messageContent.startsWith('!votekick ')) {
+      const targetName = message.content.substring('!votekick '.length).trim()
+      if (targetName) {
+        await VoteKickHandler.startVoteKick(message, targetName)
+        return
+      }
+      message.reply('Usage: `!votekick <nickname>`')
+      return
+    }
+
+    // Vote Yes: !voteyes
+    if (messageContent === '!voteyes') {
+      await VoteKickHandler.voteYes(message)
+      return
+    }
+
+    // Quotes: !addquote, !quote, !quotes, !delquote
+    if (messageContent.startsWith('!addquote ')) {
+      const args = message.content.substring('!addquote '.length)
+      QuoteHandler.addQuote(message, args)
+      return
+    }
+
+    if (messageContent === '!quote') {
+      QuoteHandler.getRandomQuote(message)
+      return
+    }
+
+    if (messageContent === '!quotes') {
+      QuoteHandler.listQuotes(message)
+      return
+    }
+
+    if (messageContent.startsWith('!delquote ')) {
+      const quoteId = messageContent.split(' ')[1]
+      QuoteHandler.deleteQuote(message, quoteId)
+      return
+    }
+
+    // Roast: !roast @user
+    if (messageContent.startsWith('!roast')) {
+      RoastHandler.execute(message)
+      return
+    }
+
+    // Poll: !poll, !vote, !endpoll
+    if (messageContent.startsWith('!poll ')) {
+      const args = message.content.substring('!poll '.length)
+      await PollHandler.createPoll(message, args)
+      return
+    }
+
+    if (messageContent.startsWith('!vote ')) {
+      const voteArg = messageContent.split(' ')[1]
+      PollHandler.vote(message, voteArg)
+      return
+    }
+
+    if (messageContent === '!endpoll') {
+      PollHandler.endPoll(message)
+      return
+    }
+
+    // Bets: !bet, !betwin, !betlose, !cancelbet, !bets, !leaderboard, !balance
+    if (messageContent.startsWith('!bet ') && !messageContent.startsWith('!betwin') && !messageContent.startsWith('!betlose')) {
+      const args = message.content.substring('!bet '.length)
+      BetHandler.placeBet(message, args)
+      return
+    }
+
+    if (messageContent.startsWith('!betwin')) {
+      const mention = message.mentions.users.first()
+      if (mention) {
+        BetHandler.resolveBet(message, mention.id, true)
+        return
+      }
+      message.reply('Usage: `!betwin @user`')
+      return
+    }
+
+    if (messageContent.startsWith('!betlose')) {
+      const mention = message.mentions.users.first()
+      if (mention) {
+        BetHandler.resolveBet(message, mention.id, false)
+        return
+      }
+      message.reply('Usage: `!betlose @user`')
+      return
+    }
+
+    if (messageContent === '!cancelbet') {
+      BetHandler.cancelBet(message)
+      return
+    }
+
+    if (messageContent === '!bets') {
+      BetHandler.showActiveBets(message)
+      return
+    }
+
+    if (messageContent === '!leaderboard') {
+      BetHandler.showLeaderboard(message)
+      return
+    }
+
+    if (messageContent === '!balance') {
+      BetHandler.checkBalance(message)
+      return
+    }
+
+    // Help command
+    if (messageContent === '!help') {
+      const helpEmbed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('🤖 Bot Commands')
+        .addFields(
+          { name: '🎵 Sound', value: '`!play <name>` — Play a sound\n`!sounds` — List sounds (slash)', inline: false },
+          { name: '🎮 Dota 2', value: '`!random <count/players>` — Randomize heroes\n`!match <steam_id>` — Last match recap', inline: false },
+          { name: '🔫 Kick', value: '`!randomckick` — Russian roulette (random kick)\n`!votekick <nick>` — Start a votekick\n`!voteyes` — Vote yes on active votekick', inline: false },
+          { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
+          { name: '🔥 Fun', value: '`!roast @user` — Roast someone\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
+          { name: '🎰 Bets', value: '`!bet <amount> <player> <prediction>` — Place a bet\n`!betwin @user` / `!betlose @user` — Resolve bet\n`!cancelbet` — Cancel your bet\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
+          { name: '🗣️ TTS', value: '`$text` — Google TTS\n`%text` — AI TTS\n`&text` — AWS TTS\n`!langs` — Supported languages', inline: false },
+        )
+
+      message.channel.send({ embeds: [helpEmbed] })
+      return
+    }
+
+    // ===== EXISTING FEATURES =====
 
     if (messageContent.startsWith('!random')) {
       const args = messageContent.split(' ')
