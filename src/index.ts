@@ -125,6 +125,7 @@ export const client = new Client({
 
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
+  BetHandler.startPoller(client)
 })
 
 client.on('custom-message', (message: string) => {

@@ -47,19 +47,20 @@ export class GroupHandler {
 
   // ─── join an existing group ───────────────────────────────────────────────
   private static async _addMember(message: Message, group: Group) {
+    const totalSlots = group.size * 2
     const alreadyIn = group.members.some((m) => m.id === message.author.id)
     if (alreadyIn) {
       message.reply('You are already in this group!')
       return
     }
-    if (group.members.length >= group.size) {
+    if (group.members.length >= totalSlots) {
       message.reply('This group is already full!')
       return
     }
     group.members.push({ id: message.author.id, name: message.author.username })
     console.log(`[GroupHandler] ${message.author.username} joined x${group.size} group`)
 
-    if (group.members.length === group.size) {
+    if (group.members.length === totalSlots) {
       // Group is full → show action buttons
       await GroupHandler._sendFullGroup(message, group)
     } else {
@@ -163,12 +164,13 @@ export class GroupHandler {
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   private static async _sendGroupStatus(message: Message, group: Group) {
-    const spots = group.size - group.members.length
+    const totalSlots = group.size * 2
+    const spots = totalSlots - group.members.length
     const memberList = group.members.map((m, i) => `${i + 1}. ${m.name}`).join('\n')
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle(`🎮 x${group.size} Group — ${group.members.length}/${group.size}`)
+      .setTitle(`🎮 x${group.size} Group (${group.size}v${group.size}) — ${group.members.length}/${totalSlots}`)
       .setDescription(memberList || 'No members yet.')
       .setFooter({ text: `${spots} spot(s) remaining | type !x${group.size} to join` })
 
@@ -180,7 +182,7 @@ export class GroupHandler {
 
     const embed = new EmbedBuilder()
       .setColor(0x00ff99)
-      .setTitle(`✅ x${group.size} Group — FULL!`)
+      .setTitle(`✅ x${group.size} Group (${group.size}v${group.size}) — FULL!`)
       .setDescription(memberList)
       .setFooter({ text: 'Choose an action below' })
 
@@ -209,7 +211,7 @@ export class GroupHandler {
 
   private static async _randomTeams(interaction: any, group: Group) {
     const shuffled = GroupHandler._shuffle(group.members)
-    const half = Math.ceil(shuffled.length / 2)
+    const half = group.size  // exactly size players per team
     const teamA = shuffled.slice(0, half)
     const teamB = shuffled.slice(half)
 
@@ -237,7 +239,7 @@ export class GroupHandler {
     const heroes: any[] = require('../assets/data/heroes.json')
 
     const shuffledMembers = GroupHandler._shuffle(group.members)
-    const half = Math.ceil(shuffledMembers.length / 2)
+    const half = group.size  // exactly size players per team
     const teamA = shuffledMembers.slice(0, half)
     const teamB = shuffledMembers.slice(half)
 

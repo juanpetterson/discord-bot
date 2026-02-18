@@ -10,6 +10,8 @@ services:
     volumes:
       - ./src/assets/uploads:/app/src/assets/uploads
       - ./src/assets/gifs:/app/src/assets/gifs
+      - ./src/assets/data/bets.json:/app/src/assets/data/bets.json
+      - ./src/assets/data/quotes.json:/app/src/assets/data/quotes.json
     env_file:
       - .env
     command: ["npm", "run", "start"]
