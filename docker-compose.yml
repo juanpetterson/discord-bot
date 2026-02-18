@@ -12,6 +12,7 @@ services:
       - ./src/assets/gifs:/app/src/assets/gifs
       - ./src/assets/data/bets.json:/app/src/assets/data/bets.json
       - ./src/assets/data/quotes.json:/app/src/assets/data/quotes.json
+      - ./src/assets/data/dota-nicks.json:/app/src/assets/data/dota-nicks.json
     env_file:
       - .env
     command: ["npm", "run", "start"]

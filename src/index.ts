@@ -264,8 +264,8 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
-    if (messageContent === '!cancelbet') {
-      BetHandler.cancelBet(message)
+    if (messageContent.startsWith('!cancelbet')) {
+      await BetHandler.cancelBet(message)
       return
     }
 
@@ -322,7 +322,7 @@ client.on('messageCreate', async (message: Message) => {
           { name: '🔫 Kick', value: '`!randomckick` — Russian roulette (random kick)\n`!votekick <nick>` — Start a votekick\n`!voteyes` — Vote yes on active votekick', inline: false },
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
           { name: '🔥 Fun', value: '`!roast @user` — Roast someone\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
-          { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet` — Cancel your bet\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
+          { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet @player` — Cancel your bet on that player\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
           { name: '🎮 x4/x5', value: '`!x4` / `!x5` — Start or join a group\n`!x4leave` / `!x5leave` — Leave group\n`!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)', inline: false },
           { name: '🗣️ TTS', value: '`$text` — Google TTS\n`%text` — AI TTS\n`&text` — AWS TTS\n`!langs` — Supported languages', inline: false },
         )

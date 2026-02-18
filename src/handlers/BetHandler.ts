@@ -26,6 +26,67 @@ export const DISCORD_TO_STEAM: Record<string, string> = {
   'xgrahl' : '51878986'
 }
 
+// Dota 2 nick cache — keyed by steamId
+const DOTA_NICKS_FILE = './src/assets/data/dota-nicks.json'
+const DOTA_NICK_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
+
+interface DotaNickEntry {
+  nick: string
+  fetchedAt: number // unix ms
+}
+
+function loadDotaNicksCache(): Record<string, DotaNickEntry> {
+  try {
+    if (!fs.existsSync(DOTA_NICKS_FILE)) return {}
+    return JSON.parse(fs.readFileSync(DOTA_NICKS_FILE, 'utf-8'))
+  } catch {
+    return {}
+  }
+}
+
+function saveDotaNicksCache(cache: Record<string, DotaNickEntry>) {
+  fs.writeFileSync(DOTA_NICKS_FILE, JSON.stringify(cache, null, 2))
+}
+
+function fetchPlayerProfile(steamId: string): Promise<any> {
+  return new Promise((resolve) => {
+    const url = `https://api.opendota.com/api/players/${steamId}`
+    https
+      .get(url, (res) => {
+        let body = ''
+        res.on('data', (chunk) => (body += chunk))
+        res.on('end', () => {
+          try { resolve(JSON.parse(body)) } catch { resolve(null) }
+        })
+      })
+      .on('error', () => resolve(null))
+  })
+}
+
+/** Returns the Dota 2 persona name for a steam32 account id, using a 6h cache. */
+async function fetchDotaNick(steamId: string | undefined, fallback: string): Promise<string> {
+  if (!steamId) return fallback
+
+  const cache = loadDotaNicksCache()
+  const entry = cache[steamId]
+
+  if (entry && Date.now() - entry.fetchedAt < DOTA_NICK_TTL_MS) {
+    return entry.nick
+  }
+
+  try {
+    const profile = await fetchPlayerProfile(steamId)
+    const nick: string = profile?.profile?.personaname || fallback
+    cache[steamId] = { nick, fetchedAt: Date.now() }
+    saveDotaNicksCache(cache)
+    console.log(`[DotaNick] Fetched nick for steamId ${steamId}: ${nick}`)
+    return nick
+  } catch (err) {
+    console.warn(`[DotaNick] Failed to fetch nick for steamId ${steamId}:`, err)
+    return entry?.nick ?? fallback
+  }
+}}
+
 
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -40,9 +101,13 @@ interface PlayerStats {
 interface ActiveBet {
   bettorId: string
   bettorName: string
+  /** Server display name of the bettor */
+  bettorDisplayName: string
   /** Discord ID of the player being bet on */
   targetDiscordId: string
   targetName: string
+  /** Dota 2 in-game nickname of the target */
+  targetDotaNick: string
   /** 'win' | 'lose' */
   prediction: 'win' | 'lose'
   timestamp: string
@@ -189,15 +254,15 @@ async function runPoller() {
         if (betWon) {
           bettorStats.points += 100
           bettorStats.wins++
-          resultLine = `✅ **${bet.bettorName}** WON! (+100 pts) — bet **${
+          resultLine = `✅ **${bet.bettorDisplayName}** WON! (+100 pts) — bet **${
             bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'
-          }** on ${bet.targetName} — Balance: **${bettorStats.points}**`
+          }** on **${bet.targetDotaNick}** — Balance: **${bettorStats.points}**`
         } else {
           bettorStats.points = Math.max(0, bettorStats.points - 50)
           bettorStats.losses++
-          resultLine = `❌ **${bet.bettorName}** LOST! (-50 pts) — bet **${
+          resultLine = `❌ **${bet.bettorDisplayName}** LOST! (-50 pts) — bet **${
             bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'
-          }** on ${bet.targetName} — Balance: **${bettorStats.points}**`
+          }** on **${bet.targetDotaNick}** — Balance: **${bettorStats.points}**`
         }
 
         console.log(`[BetPoller] Resolved bet: ${resultLine}`)
@@ -299,45 +364,56 @@ export class BetHandler {
       return
     }
 
-    // ── Check if the match has already started & whether bets are still open ──
+    // ── Check if there is a running/recent match & whether bets are still open ──
     const steamId = DISCORD_TO_STEAM[mention.username]
+    const targetDotaNick = await fetchDotaNick(steamId, mention.username)
+
     if (steamId) {
       try {
         const recentMatch = await fetchRecentMatch(steamId)
-        if (recentMatch) {
-          const startTimestamp: number = recentMatch.start_time
-          const gameMode: number = recentMatch.game_mode
-          const elapsedMinutes = (Date.now() / 1000 - startTimestamp) / 60
-          const isTurbo = gameMode === 23
-          const limitMinutes = isTurbo ? 5 : 10
 
-          console.log(
-            `[BetHandler] Recent match for ${mention.username}: elapsed=${elapsedMinutes.toFixed(1)} min, turbo=${isTurbo}, limit=${limitMinutes} min`
+        // No match found at all, or last match was more than 4 hours ago → player not playing
+        const ACTIVE_SESSION_WINDOW_S = 4 * 60 * 60 // 4 hours
+        if (!recentMatch || (Date.now() / 1000 - recentMatch.start_time) > ACTIVE_SESSION_WINDOW_S) {
+          message.reply(`Esse macaco nem ta jogando — **${targetDotaNick}**`)
+          return
+        }
+
+        const startTimestamp: number = recentMatch.start_time
+        const gameMode: number = recentMatch.game_mode
+        const elapsedMinutes = (Date.now() / 1000 - startTimestamp) / 60
+        const isTurbo = gameMode === 23
+        const limitMinutes = isTurbo ? 5 : 10
+
+        console.log(
+          `[BetHandler] Recent match for ${mention.username}: elapsed=${elapsedMinutes.toFixed(1)} min, turbo=${isTurbo}, limit=${limitMinutes} min`
+        )
+
+        if (elapsedMinutes > limitMinutes) {
+          message.reply(
+            `⏰ Bets are closed! The match started **${elapsedMinutes.toFixed(0)} minutes ago** ` +
+              `(limit: ${limitMinutes} min for ${isTurbo ? 'Turbo' : 'Normal/Ranked'} matches).`
           )
-
-          if (elapsedMinutes > limitMinutes) {
-            message.reply(
-              `⏰ Bets are closed! The match started **${elapsedMinutes.toFixed(0)} minutes ago** ` +
-                `(limit: ${limitMinutes} min for ${isTurbo ? 'Turbo' : 'Normal/Ranked'} matches).`
-            )
-            return
-          }
+          return
         }
       } catch (err) {
         console.warn('[BetHandler] Could not check match time:', err)
       }
     } else {
-      console.log(`[BetHandler] No Steam ID mapped for username '${mention.username}' — skipping time check`)
+      console.log(`[BetHandler] No Steam ID mapped for username '${mention.username}' — skipping match check`)
     }
 
     const data = loadBets()
-    ensurePlayer(data, message.author.id, message.author.username)
+    const bettorDisplayName = message.member?.displayName ?? message.author.username
+    ensurePlayer(data, message.author.id, bettorDisplayName)
 
-    // One active bet per bettor
-    const existingBet = data.activeBets.find((b) => b.bettorId === message.author.id)
+    // One active bet per bettor per target
+    const existingBet = data.activeBets.find(
+      (b) => b.bettorId === message.author.id && b.targetName === mention.username
+    )
     if (existingBet) {
       message.reply(
-        `You already have an active bet on **${existingBet.targetName}** (${existingBet.prediction}). Use \`!cancelbet\` first.`
+        `You already have an active bet on **${existingBet.targetDotaNick}** (${existingBet.prediction}). Use \`!cancelbet @${mention.username}\` first.`
       )
       return
     }
@@ -347,8 +423,10 @@ export class BetHandler {
     data.activeBets.push({
       bettorId: message.author.id,
       bettorName: message.author.username,
+      bettorDisplayName,
       targetDiscordId: mention.id,
       targetName: mention.username,
+      targetDotaNick,
       prediction,
       timestamp: new Date().toISOString(),
       channelId: message.channel.id,
@@ -361,8 +439,8 @@ export class BetHandler {
     const embed = new EmbedBuilder()
       .setColor(prediction === 'win' ? 0x00cc66 : 0xff3333)
       .setTitle('🎰 Bet Placed!')
-      .setDescription(`**${message.author.username}** bets that **${mention.username}** will **${predLabel}**!`)
-      .setFooter({ text: '!cancelbet to cancel | !bets to see active bets' })
+      .setDescription(`**${bettorDisplayName}** bets that **${targetDotaNick}** will **${predLabel}**!`)
+      .setFooter({ text: `!cancelbet @${mention.username} to cancel | !bets to see active bets` })
 
     message.channel.send({ embeds: [embed] })
   }
@@ -420,13 +498,13 @@ export class BetHandler {
         bettorStats.points += 100
         bettorStats.wins++
         results.push(
-          `✅ **${bet.bettorName}** WON! (+100 pts) — bet **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}** on ${bet.targetName} — Balance: **${bettorStats.points}**`
+          `✅ **${bet.bettorDisplayName ?? bet.bettorName}** WON! (+100 pts) — bet **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}** on **${bet.targetDotaNick ?? bet.targetName}** — Balance: **${bettorStats.points}**`
         )
       } else {
         bettorStats.points = Math.max(0, bettorStats.points - 50)
         bettorStats.losses++
         results.push(
-          `❌ **${bet.bettorName}** LOST! (-50 pts) — bet **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}** on ${bet.targetName} — Balance: **${bettorStats.points}**`
+          `❌ **${bet.bettorDisplayName ?? bet.bettorName}** LOST! (-50 pts) — bet **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}** on **${bet.targetDotaNick ?? bet.targetName}** — Balance: **${bettorStats.points}**`
         )
       }
 
@@ -445,21 +523,30 @@ export class BetHandler {
   }
 
   /**
-   * Cancel your own active bet: !cancelbet
+   * Cancel a specific bet: !cancelbet @target
    */
-  static cancelBet(message: Message) {
+  static async cancelBet(message: Message) {
+    const mention = message.mentions.users.first()
+    if (!mention) {
+      message.reply('Usage: `!cancelbet @player` — mention the player you bet on.')
+      return
+    }
+
     const data = loadBets()
-    const idx = data.activeBets.findIndex((b) => b.bettorId === message.author.id)
+    const idx = data.activeBets.findIndex(
+      (b) => b.bettorId === message.author.id && b.targetName === mention.username
+    )
 
     if (idx === -1) {
-      message.reply("You don't have an active bet!")
+      const nick = await fetchDotaNick(DISCORD_TO_STEAM[mention.username], mention.username)
+      message.reply(`You don't have an active bet on **${nick}**.`)
       return
     }
 
     const bet = data.activeBets.splice(idx, 1)[0]
     saveBets(data)
 
-    message.reply(`🔄 Bet cancelled. You had bet **${bet.prediction}** on **${bet.targetName}**.`)
+    message.reply(`🔄 Bet cancelled. You had bet **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}** on **${bet.targetDotaNick}**.`)
   }
 
   /**
@@ -476,7 +563,7 @@ export class BetHandler {
     const betsText = data.activeBets
       .map(
         (bet, i) =>
-          `${i + 1}. **${bet.bettorName}** → ${bet.targetName}: **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}**`
+          `${i + 1}. **${bet.bettorDisplayName ?? bet.bettorName}** → **${bet.targetDotaNick ?? bet.targetName}**: **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}**`
       )
       .join('\n')
 
@@ -484,7 +571,7 @@ export class BetHandler {
       .setColor(0xffa500)
       .setTitle('🎰 Active Bets')
       .setDescription(betsText)
-      .setFooter({ text: '!betwin <matchId> to resolve | !cancelbet to cancel yours' })
+      .setFooter({ text: '!betwin <matchId> to resolve | !cancelbet @player to cancel' })
 
     message.channel.send({ embeds: [embed] })
   }
