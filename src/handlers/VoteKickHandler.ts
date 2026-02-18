@@ -48,7 +48,10 @@ export class VoteKickHandler {
     let bestMatch: GuildMember | null = null
     let bestScore = Infinity
 
-    members.forEach((member: GuildMember) => {
+    // Exclude the initiator from the candidate pool to avoid self-match
+    const candidates = members.filter((m: GuildMember) => m.id !== message.author.id)
+
+    candidates.forEach((member: GuildMember) => {
       const displayName = member.displayName.toLowerCase()
       const username = member.user.username.toLowerCase()
 

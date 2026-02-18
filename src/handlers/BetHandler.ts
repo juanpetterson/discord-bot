@@ -1,4 +1,4 @@
-import { Message, EmbedBuilder, Client, TextChannel } from 'discord.js'
+import { Message, EmbedBuilder } from 'discord.js'
 import fs from 'fs'
 import https from 'https'
 
@@ -111,8 +111,6 @@ interface ActiveBet {
   /** 'win' | 'lose' */
   prediction: 'win' | 'lose'
   timestamp: string
-  /** Discord channel ID where the bet was placed — used for auto-resolve notifications */
-  channelId: string
 }
 
 interface BetsData {
@@ -165,169 +163,11 @@ function fetchMatch(matchId: string): Promise<any> {
   })
 }
 
-function fetchRecentMatch(accountId: string): Promise<any> {
-  return new Promise((resolve) => {
-    const url = `https://api.opendota.com/api/players/${accountId}/recentMatches`
-    https
-      .get(url, (res) => {
-        let body = ''
-        res.on('data', (chunk) => (body += chunk))
-        res.on('end', () => {
-          try {
-            const matches = JSON.parse(body)
-            resolve(Array.isArray(matches) && matches.length > 0 ? matches[0] : null)
-          } catch { resolve(null) }
-        })
-      })
-      .on('error', () => resolve(null))
-  })
-}
 
-// ─── Auto-resolve poller ──────────────────────────────────────────────────
-
-const POLL_INTERVAL_MS = 2 * 60 * 1000 // every 2 minutes
-let pollerTimer: ReturnType<typeof setTimeout> | null = null
-let pollerClient: Client | null = null
-
-async function runPoller() {
-  pollerTimer = null
-  const data = loadBets()
-
-  if (data.activeBets.length === 0) {
-    console.log('[BetPoller] No active bets — poller stopped.')
-    return
-  }
-
-  console.log(`[BetPoller] Checking ${data.activeBets.length} active bet(s)...`)
-
-  // Collect unique target steam IDs that have bets
-  const targetSteamIds = new Set<string>()
-  for (const bet of data.activeBets) {
-    const steamId = DISCORD_TO_STEAM[bet.targetName]
-    if (steamId) targetSteamIds.add(steamId)
-  }
-
-  // For each target, fetch their most recent match
-  for (const steamId of targetSteamIds) {
-    try {
-      const recent = await fetchRecentMatch(steamId)
-      if (!recent) continue
-
-      const matchId: string = String(recent.match_id)
-      // Match must have ended (has duration) and not be a live/ongoing one
-      if (!recent.duration || recent.duration <= 0) continue
-
-      // Find bets targeting this steam player
-      const relevantBets = data.activeBets.filter(
-        (b) => DISCORD_TO_STEAM[b.targetName] === steamId
-      )
-
-      for (const bet of relevantBets) {
-        // The match must have started AFTER the bet was placed
-        const betTime = new Date(bet.timestamp).getTime() / 1000
-        if (recent.start_time <= betTime) {
-          console.log(`[BetPoller] Match ${matchId} for ${bet.targetName} started before the bet — skipping`)
-          continue
-        }
-
-        // Fetch full match to get radiant_win and player slot
-        const fullMatch = await fetchMatch(matchId)
-        if (!fullMatch || !fullMatch.players) {
-          console.log(`[BetPoller] Match ${matchId} not yet parsed by OpenDota — will retry next poll`)
-          continue
-        }
-
-        const accountId32 = parseInt(steamId, 10)
-        const player = fullMatch.players.find((p: any) => p.account_id === accountId32)
-        if (!player) {
-          console.log(`[BetPoller] Player ${bet.targetName} not found in match ${matchId}`)
-          continue
-        }
-
-        const isRadiant = player.player_slot < 128
-        const didWin: boolean = isRadiant ? fullMatch.radiant_win : !fullMatch.radiant_win
-        const betWon = (bet.prediction === 'win' && didWin) || (bet.prediction === 'lose' && !didWin)
-
-        const bettorStats = ensurePlayer(data, bet.bettorId, bet.bettorName)
-
-        let resultLine: string
-        if (betWon) {
-          bettorStats.points += 100
-          bettorStats.wins++
-          resultLine = `✅ **${bet.bettorDisplayName}** WON! (+100 pts) — bet **${
-            bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'
-          }** on **${bet.targetDotaNick}** — Balance: **${bettorStats.points}**`
-        } else {
-          bettorStats.points = Math.max(0, bettorStats.points - 50)
-          bettorStats.losses++
-          resultLine = `❌ **${bet.bettorDisplayName}** LOST! (-50 pts) — bet **${
-            bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'
-          }** on **${bet.targetDotaNick}** — Balance: **${bettorStats.points}**`
-        }
-
-        console.log(`[BetPoller] Resolved bet: ${resultLine}`)
-        data.activeBets = data.activeBets.filter((b) => b.bettorId !== bet.bettorId)
-
-        // Post result to the channel where the bet was placed
-        if (pollerClient) {
-          try {
-            const channel = pollerClient.channels.cache.get(bet.channelId) as TextChannel | undefined
-            if (channel) {
-              const embed = new EmbedBuilder()
-                .setColor(betWon ? 0x00cc66 : 0xff3333)
-                .setTitle(`🏁 Bet Auto-Resolved — Match ${matchId}`)
-                .setDescription(resultLine)
-                .setFooter({ text: 'Auto-resolved by match poller' })
-              await channel.send({ embeds: [embed] })
-            }
-          } catch (err) {
-            console.warn('[BetPoller] Could not send result to channel:', err)
-          }
-        }
-
-        saveBets(data) // save after each resolution in case of crash
-      }
-    } catch (err) {
-      console.warn(`[BetPoller] Error checking steamId ${steamId}:`, err)
-    }
-  }
-
-  saveBets(data)
-
-  // Reschedule if there are still active bets
-  const remaining = loadBets().activeBets.length
-  if (remaining > 0) {
-    console.log(`[BetPoller] ${remaining} bet(s) still active — next check in ${POLL_INTERVAL_MS / 60000} min`)
-    pollerTimer = setTimeout(runPoller, POLL_INTERVAL_MS)
-  } else {
-    console.log('[BetPoller] All bets resolved — poller stopped.')
-  }
-}
-
-function ensurePollerRunning() {
-  if (!pollerTimer) {
-    console.log(`[BetPoller] Starting poller (interval: ${POLL_INTERVAL_MS / 60000} min)`)
-    pollerTimer = setTimeout(runPoller, POLL_INTERVAL_MS)
-  }
-}
 
 // ─── BetHandler ───────────────────────────────────────────────────────────
 
 export class BetHandler {
-  /**
-   * Call once at startup with the Discord client so the auto-poller
-   * can post results to the correct channels.
-   */
-  static startPoller(client: Client) {
-    pollerClient = client
-    // If there are already persisted active bets (e.g. after a restart), kick off the poller
-    const data = loadBets()
-    if (data.activeBets.length > 0) {
-      console.log(`[BetPoller] Found ${data.activeBets.length} persisted bet(s) — resuming poller`)
-      ensurePollerRunning()
-    }
-  }
-
   /**
    * !bet @player nós|nos|eles
    *
@@ -364,44 +204,8 @@ export class BetHandler {
       return
     }
 
-    // ── Check if there is a running/recent match & whether bets are still open ──
     const steamId = DISCORD_TO_STEAM[mention.username]
     const targetDotaNick = await fetchDotaNick(steamId, mention.username)
-
-    if (steamId) {
-      try {
-        const recentMatch = await fetchRecentMatch(steamId)
-
-        // No match found at all, or last match was more than 4 hours ago → player not playing
-        const ACTIVE_SESSION_WINDOW_S = 4 * 60 * 60 // 4 hours
-        if (!recentMatch || (Date.now() / 1000 - recentMatch.start_time) > ACTIVE_SESSION_WINDOW_S) {
-          message.reply(`Esse macaco nem ta jogando — **${targetDotaNick}**`)
-          return
-        }
-
-        const startTimestamp: number = recentMatch.start_time
-        const gameMode: number = recentMatch.game_mode
-        const elapsedMinutes = (Date.now() / 1000 - startTimestamp) / 60
-        const isTurbo = gameMode === 23
-        const limitMinutes = isTurbo ? 5 : 10
-
-        console.log(
-          `[BetHandler] Recent match for ${mention.username}: elapsed=${elapsedMinutes.toFixed(1)} min, turbo=${isTurbo}, limit=${limitMinutes} min`
-        )
-
-        if (elapsedMinutes > limitMinutes) {
-          message.reply(
-            `⏰ Bets are closed! The match started **${elapsedMinutes.toFixed(0)} minutes ago** ` +
-              `(limit: ${limitMinutes} min for ${isTurbo ? 'Turbo' : 'Normal/Ranked'} matches).`
-          )
-          return
-        }
-      } catch (err) {
-        console.warn('[BetHandler] Could not check match time:', err)
-      }
-    } else {
-      console.log(`[BetHandler] No Steam ID mapped for username '${mention.username}' — skipping match check`)
-    }
 
     const data = loadBets()
     const bettorDisplayName = message.member?.displayName ?? message.author.username
@@ -429,11 +233,9 @@ export class BetHandler {
       targetDotaNick,
       prediction,
       timestamp: new Date().toISOString(),
-      channelId: message.channel.id,
     })
 
     saveBets(data)
-    ensurePollerRunning()
 
     const predLabel = prediction === 'win' ? '🏆 WIN' : '💀 LOSE'
     const embed = new EmbedBuilder()

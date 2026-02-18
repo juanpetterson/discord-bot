@@ -125,7 +125,6 @@ export const client = new Client({
 
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
-  BetHandler.startPoller(client)
 })
 
 client.on('custom-message', (message: string) => {
@@ -136,7 +135,7 @@ client.on('custom-message', (message: string) => {
   channel.send(message)
 })
 
-client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) => {
+client.on(Events.VoiceStateUpdate, async (oldState: VoiceState, newState: VoiceState) => {
   const channel = client.channels.cache.get(newState.channelId || '') as any;
   const botChannel = client.channels.cache.get(VoiceHandler.connectionChannelId || '') as any;
 
@@ -146,6 +145,14 @@ client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) 
     const botChannelMembersNames = botChannel.members.map((member: GuildMember) => member.user.username);
     if (botChannel.members.size === 1 && botChannelMembersNames.includes('MACACKSOUND')) {
       VoiceHandler.destroyConnection();
+    }
+  }
+
+  // Remove user from active group when they fully disconnect from voice
+  if (oldState.channelId !== null && newState.channelId === null) {
+    const userId = oldState.member?.id
+    if (userId) {
+      await GroupHandler.handleVoiceLeave(userId, client)
     }
   }
 
@@ -284,27 +291,27 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
-    // Group: !x4 / !x5 start or join
-    if (messageContent === '!x4' || messageContent === '!x5') {
-      const size = messageContent === '!x4' ? 4 : 5
+    // Group: !x2 / !x4 / !x5 start or join
+    if (messageContent === '!x2' || messageContent === '!x4' || messageContent === '!x5') {
+      const size = messageContent === '!x4' ? 4 : messageContent === '!x5' ? 5 : 2
       await GroupHandler.startOrJoin(message, size)
       return
     }
 
     // Leave group
-    if (messageContent === '!x4leave' || messageContent === '!x5leave') {
+    if (messageContent === '!x2leave' || messageContent === '!x4leave' || messageContent === '!x5leave') {
       await GroupHandler.leave(message)
       return
     }
 
     // Cancel group (creator only)
-    if (messageContent === '!x4cancel' || messageContent === '!x5cancel') {
+    if (messageContent === '!x2cancel' || messageContent === '!x4cancel' || messageContent === '!x5cancel') {
       GroupHandler.cancel(message)
       return
     }
 
-    // Kick a member (creator only): !x4kick <name> or !x5kick <name>
-    if (messageContent.startsWith('!x4kick ') || messageContent.startsWith('!x5kick ')) {
+    // Kick a member (creator only): !x2kick / !x4kick / !x5kick <name>
+    if (messageContent.startsWith('!x2kick ') || messageContent.startsWith('!x4kick ') || messageContent.startsWith('!x5kick ')) {
       const spaceIdx = messageContent.indexOf(' ')
       const partialName = message.content.substring(spaceIdx + 1).trim()
       await GroupHandler.kick(message, partialName)
@@ -323,7 +330,7 @@ client.on('messageCreate', async (message: Message) => {
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
           { name: '🔥 Fun', value: '`!roast @user` — Roast someone\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
           { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet @player` — Cancel your bet on that player\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
-          { name: '🎮 x4/x5', value: '`!x4` / `!x5` — Start or join a group\n`!x4leave` / `!x5leave` — Leave group\n`!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)', inline: false },
+          { name: '🎮 x2/x4/x5', value: '`!x2` / `!x4` / `!x5` — Start or join a group (2v2 / 4v4 / 5v5)\n`!x2leave` / `!x4leave` / `!x5leave` — Leave group\n`!x2cancel` / `!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x2kick <nick>` / `!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)\n> After teams are randomized, Team A is moved to a second voice channel automatically.', inline: false },
           { name: '🗣️ TTS', value: '`$text` — Google TTS\n`%text` — AI TTS\n`&text` — AWS TTS\n`!langs` — Supported languages', inline: false },
         )
 

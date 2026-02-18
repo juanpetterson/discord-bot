@@ -1,10 +1,10 @@
-import { Message, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js'
+import { Message, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from 'discord.js'
 
 // Dota 2 roles per slot index (0-4 = team A, 5-9 = team B)
 const ROLES = ['Hard Carry', 'Mid Lane', 'Offlane', 'Soft Support', 'Hard Support']
 
 export interface Group {
-  size: 4 | 5
+  size: 2 | 4 | 5
   creatorId: string
   creatorName: string
   members: { id: string; name: string }[]
@@ -16,8 +16,8 @@ export interface Group {
 const activeGroups = new Map<string, Group>()
 
 export class GroupHandler {
-  // ─── !x4 / !x5 ───────────────────────────────────────────────────────────
-  static async startOrJoin(message: Message, size: 4 | 5) {
+  // ─── !x2 / !x4 / !x5 ────────────────────────────────────────────────────
+  static async startOrJoin(message: Message, size: 2 | 4 | 5) {
     const channelId = message.channel.id
     const existing = activeGroups.get(channelId)
 
@@ -232,6 +232,7 @@ export class GroupHandler {
       )
 
     await interaction.channel.send({ embeds: [embed] })
+    await GroupHandler._splitVoiceChannels(interaction, teamA, teamB)
   }
 
   private static async _randomTeamsHeroes(interaction: any, group: Group) {
@@ -278,9 +279,126 @@ export class GroupHandler {
       )
 
     await interaction.channel.send({ embeds: [embed] })
+    await GroupHandler._splitVoiceChannels(interaction, teamA, teamB)
+  }
+
+  // ─── Voice channel splitter ───────────────────────────────────────────────
+  /**
+   * After teams are decided, move Team A to a second voice channel.
+   * Team B (and any extra spectators) stays in the home channel.
+   * If all members are offline/not in voice, silently skips.
+   */
+  private static async _splitVoiceChannels(
+    interaction: any,
+    teamA: { id: string; name: string }[],
+    teamB: { id: string; name: string }[]
+  ) {
+    const guild = interaction.guild
+    if (!guild) return
+
+    // Count how many group members are in each voice channel to find the "lobby"
+    const channelCounts = new Map<string, number>()
+    const allMembers = [...teamA, ...teamB]
+    for (const m of allMembers) {
+      const guildMember = guild.members.cache.get(m.id)
+      const vcId = guildMember?.voice?.channelId
+      if (vcId) channelCounts.set(vcId, (channelCounts.get(vcId) || 0) + 1)
+    }
+
+    if (channelCounts.size === 0) return // nobody in a voice channel — skip silently
+
+    // The channel with the most group members is the "home" channel
+    let homeChannelId = ''
+    let maxCount = 0
+    for (const [id, count] of channelCounts) {
+      if (count > maxCount) { maxCount = count; homeChannelId = id }
+    }
+
+    const homeChannel = guild.channels.cache.get(homeChannelId) as any
+    if (!homeChannel) return
+
+    // Find another voice channel in the same guild (any, as long as it isn't the home)
+    const otherChannel = guild.channels.cache.find(
+      (ch: any) => ch.type === ChannelType.GuildVoice && ch.id !== homeChannelId
+    ) as any
+
+    if (!otherChannel) {
+      await interaction.channel.send('⚠️ No second voice channel found — please split teams manually.')
+      return
+    }
+
+    // Move Team A to the other channel; Team B + spectators stay in home channel
+    const moved: string[] = []
+    const failed: string[] = []
+    for (const m of teamA) {
+      try {
+        const guildMember = guild.members.cache.get(m.id)
+        if (guildMember?.voice?.channelId) {
+          await guildMember.voice.setChannel(otherChannel)
+          moved.push(m.name)
+        }
+      } catch {
+        failed.push(m.name)
+      }
+    }
+
+    if (moved.length === 0 && failed.length === 0) return // nobody was in voice
+
+    const lines = [
+      `🔵 **Team A** → moved to **${otherChannel.name}**`,
+      `🔴 **Team B** → stays in **${homeChannel.name}**`,
+    ]
+    if (failed.length) lines.push(`⚠️ Could not move: ${failed.join(', ')}`)
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle('🔀 Voice Channels Split')
+      .setDescription(lines.join('\n'))
+
+    await interaction.channel.send({ embeds: [embed] })
   }
 
   static getActive(channelId: string): Group | undefined {
     return activeGroups.get(channelId)
+  }
+
+  /**
+   * Called from the VoiceStateUpdate event when a user fully disconnects from voice.
+   * Removes them from any active group; disbands the group if they were the creator.
+   */
+  static async handleVoiceLeave(userId: string, client: any) {
+    for (const [channelId, group] of activeGroups.entries()) {
+      const memberIndex = group.members.findIndex((m) => m.id === userId)
+      if (memberIndex === -1) continue
+
+      const member = group.members[memberIndex]
+
+      // Attempt to get the text channel to send a notification
+      const textChannel = client.channels.cache.get(channelId) as any
+
+      if (group.creatorId === userId) {
+        // Creator left → disband
+        activeGroups.delete(channelId)
+        console.log(`[GroupHandler] Creator ${member.name} left voice — x${group.size} group disbanded`)
+        if (textChannel) {
+          await textChannel.send(
+            `🚫 **${member.name}** (creator) left the voice channel — x${group.size} group disbanded.`
+          )
+        }
+      } else {
+        // Regular member left → remove
+        group.members.splice(memberIndex, 1)
+        console.log(`[GroupHandler] ${member.name} left voice — removed from x${group.size} group`)
+        if (textChannel) {
+          const totalSlots = group.size * 2
+          await textChannel.send(
+            `👋 **${member.name}** left the voice channel and was removed from the x${group.size} group. ` +
+            `(${group.members.length}/${totalSlots})`
+          )
+        }
+      }
+      // A user can only be in one group, so stop after the first match
+      break
+    }
   }
 }
