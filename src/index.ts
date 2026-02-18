@@ -180,8 +180,8 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
-    // Russian Roulette: !randomckick
-    if (messageContent === '!randomckick') {
+    // Russian Roulette: !randomkick
+    if (messageContent === '!randomkick') {
       await RandomKickHandler.execute(message)
       return
     }
