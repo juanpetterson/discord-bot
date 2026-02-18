@@ -78,6 +78,7 @@ import { QuoteHandler } from './handlers/QuoteHandler'
 import { RoastHandler } from './handlers/RoastHandler'
 import { PollHandler } from './handlers/PollHandler'
 import { BetHandler } from './handlers/BetHandler'
+import { GroupHandler } from './handlers/GroupHandler'
 
 import { calculateTextWidth } from './utils'
 
@@ -249,30 +250,16 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
-    // Bets: !bet, !betwin, !betlose, !cancelbet, !bets, !leaderboard, !balance
-    if (messageContent.startsWith('!bet ') && !messageContent.startsWith('!betwin') && !messageContent.startsWith('!betlose')) {
+    // Bets: !bet @player nós|nos|eles, !betwin <matchId>, !cancelbet, !bets, !leaderboard, !balance
+    if (messageContent.startsWith('!bet ') && !messageContent.startsWith('!betwin')) {
       const args = message.content.substring('!bet '.length)
-      BetHandler.placeBet(message, args)
+      await BetHandler.placeBet(message, args)
       return
     }
 
     if (messageContent.startsWith('!betwin')) {
-      const mention = message.mentions.users.first()
-      if (mention) {
-        BetHandler.resolveBet(message, mention.id, true)
-        return
-      }
-      message.reply('Usage: `!betwin @user`')
-      return
-    }
-
-    if (messageContent.startsWith('!betlose')) {
-      const mention = message.mentions.users.first()
-      if (mention) {
-        BetHandler.resolveBet(message, mention.id, false)
-        return
-      }
-      message.reply('Usage: `!betlose @user`')
+      const matchId = messageContent.split(' ')[1]
+      await BetHandler.resolveByMatch(message, matchId)
       return
     }
 
@@ -296,6 +283,33 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
+    // Group: !x4 / !x5 start or join
+    if (messageContent === '!x4' || messageContent === '!x5') {
+      const size = messageContent === '!x4' ? 4 : 5
+      await GroupHandler.startOrJoin(message, size)
+      return
+    }
+
+    // Leave group
+    if (messageContent === '!x4leave' || messageContent === '!x5leave') {
+      await GroupHandler.leave(message)
+      return
+    }
+
+    // Cancel group (creator only)
+    if (messageContent === '!x4cancel' || messageContent === '!x5cancel') {
+      GroupHandler.cancel(message)
+      return
+    }
+
+    // Kick a member (creator only): !x4kick <name> or !x5kick <name>
+    if (messageContent.startsWith('!x4kick ') || messageContent.startsWith('!x5kick ')) {
+      const spaceIdx = messageContent.indexOf(' ')
+      const partialName = message.content.substring(spaceIdx + 1).trim()
+      await GroupHandler.kick(message, partialName)
+      return
+    }
+
     // Help command
     if (messageContent === '!help') {
       const helpEmbed = new EmbedBuilder()
@@ -307,7 +321,8 @@ client.on('messageCreate', async (message: Message) => {
           { name: '🔫 Kick', value: '`!randomckick` — Russian roulette (random kick)\n`!votekick <nick>` — Start a votekick\n`!voteyes` — Vote yes on active votekick', inline: false },
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
           { name: '🔥 Fun', value: '`!roast @user` — Roast someone\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
-          { name: '🎰 Bets', value: '`!bet <amount> <player> <prediction>` — Place a bet\n`!betwin @user` / `!betlose @user` — Resolve bet\n`!cancelbet` — Cancel your bet\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
+          { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet` — Cancel your bet\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
+          { name: '🎮 x4/x5', value: '`!x4` / `!x5` — Start or join a group\n`!x4leave` / `!x5leave` — Leave group\n`!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)', inline: false },
           { name: '🗣️ TTS', value: '`$text` — Google TTS\n`%text` — AI TTS\n`&text` — AWS TTS\n`!langs` — Supported languages', inline: false },
         )
 
@@ -418,6 +433,12 @@ client.on('interactionCreate', async (interaction) => {
 
   
   const isButtonInteraction = interaction.isButton()
+
+  // Group buttons (random teams / random teams + heroes)
+  if (isButtonInteraction && (interaction.customId === 'group_random_teams' || interaction.customId === 'group_random_teams_heroes')) {
+    await GroupHandler.handleButton(interaction)
+    return
+  }
 
   if (messageInteractionName === 'sounds' || isButtonInteraction) {
     // ready file names from the assets/uploads folder
