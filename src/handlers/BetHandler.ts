@@ -85,7 +85,7 @@ async function fetchDotaNick(steamId: string | undefined, fallback: string): Pro
     console.warn(`[DotaNick] Failed to fetch nick for steamId ${steamId}:`, err)
     return entry?.nick ?? fallback
   }
-}}
+}
 
 
 
