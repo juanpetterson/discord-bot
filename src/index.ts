@@ -291,6 +291,13 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
+    // Auto group: !autox2 / !autox4 / !autox5
+    if (messageContent.startsWith('!autox2') || messageContent.startsWith('!autox4') || messageContent.startsWith('!autox5')) {
+      const size = messageContent.startsWith('!autox4') ? 4 : messageContent.startsWith('!autox5') ? 5 : 2
+      await GroupHandler.autoGroup(message, size)
+      return
+    }
+
     // Group: !x2 / !x4 / !x5 start or join
     if (messageContent === '!x2' || messageContent === '!x4' || messageContent === '!x5') {
       const size = messageContent === '!x4' ? 4 : messageContent === '!x5' ? 5 : 2
@@ -330,7 +337,7 @@ client.on('messageCreate', async (message: Message) => {
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
           { name: '🔥 Fun', value: '`!roast @user` — Roast someone\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
           { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet @player` — Cancel your bet on that player\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
-          { name: '🎮 x2/x4/x5', value: '`!x2` / `!x4` / `!x5` — Start or join a group (2v2 / 4v4 / 5v5)\n`!x2leave` / `!x4leave` / `!x5leave` — Leave group\n`!x2cancel` / `!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x2kick <nick>` / `!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)\n> After teams are randomized, Team A is moved to a second voice channel automatically.', inline: false },
+          { name: '🎮 x2/x4/x5', value: '`!x2` / `!x4` / `!x5` — Start or join a group manually\n`!autox2` / `!autox4` / `!autox5 [@skip1 @skip2]` — Auto-fill from voice channel (exclude @mentions)\n`!x2leave` / `!x4leave` / `!x5leave` — Leave group\n`!x2cancel` / `!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x2kick <nick>` / `!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)\n> Buttons: **🔀 Move to Channels** splits voice after teams are decided | **⚔️ Assign Heroes** assigns Dota 2 heroes', inline: false },
           { name: '🗣️ TTS', value: '`$text` — Google TTS\n`%text` — AI TTS\n`&text` — AWS TTS\n`!langs` — Supported languages', inline: false },
         )
 
