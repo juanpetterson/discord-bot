@@ -463,8 +463,8 @@ client.on('interactionCreate', async (interaction) => {
   
   const isButtonInteraction = interaction.isButton()
 
-  // Group buttons (random teams / random teams + heroes)
-  if (isButtonInteraction && (interaction.customId === 'group_random_teams' || interaction.customId === 'group_random_teams_heroes')) {
+  // Group buttons (join / random teams / random teams + heroes / assign heroes / split channels)
+  if (isButtonInteraction && interaction.customId.startsWith('group_')) {
     await GroupHandler.handleButton(interaction)
     return
   }
