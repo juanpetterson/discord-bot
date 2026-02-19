@@ -7,31 +7,31 @@ import { askGemini, roastPrompt } from '../ai'
 //  Generic roast pools (fallback when no Steam data) 
 
 const GENERIC_ROASTS_PTBR = [
-  '{name} joga Dota como algu�m que aprendeu pelo tutorial do bot e ainda reprovou.',
-  'Se feeding fosse Olimp�ada, {name} j� teria uma prateleira cheia de ouros.',
-  'O MMR de {name} � t�o baixo que � usado como exemplo negativo em aula de matem�tica.',
-  'J� vi gameplay melhor de um jogador desconectado do que de {name}.',
-  '{name} disse "eu carry" e carregou o time inimigo pra vit�ria.',
-  'A consci�ncia de {name} � t�o ruim que n�o perceberia um Riki mesmo se ele estivesse vis�vel.',
-  'Lenda diz que {name} um dia usou BKB depois de morrer. Hist�ria real.',
+  '{name} joga Dota como algu\ufffdm que aprendeu pelo tutorial do bot e ainda reprovou.',
+  'Se feeding fosse Olimp\ufffdada, {name} j\ufffd teria uma prateleira cheia de ouros.',
+  'O MMR de {name} \ufffd t\ufffdo baixo que \ufffd usado como exemplo negativo em aula de matem\ufffdtica.',
+  'J\ufffd vi gameplay melhor de um jogador desconectado do que de {name}.',
+  '{name} disse "eu carry" e carregou o time inimigo pra vit\ufffdria.',
+  'A consci\ufffdncia de {name} \ufffd t\ufffdo ruim que n\ufffdo perceberia um Riki mesmo se ele estivesse vis\ufffdvel.',
+  'Lenda diz que {name} um dia usou BKB depois de morrer. Hist\ufffdria real.',
   '{name} compra ward como se estivesse saindo de moda... ah espera, {name} nunca compra ward.',
-  'At� bots reportam {name} por feeding.',
+  'At\ufffd bots reportam {name} por feeding.',
   '{name} pegou Invoker e usou 2 skills durante todo o jogo. As duas foram Ghost Walk.',
   '"Quando {name} joga suporte, o carry tem que suportar {name}."',
-  'O farm de {name} � t�o ruim que at� um Anti-Mage sem BFury ficaria impressionado com o quanto voc� n�o farmou.',
-  '{name} tem a consci�ncia de situa��o de uma creep. Na verdade, creeps t�m melhor pathfinding.',
-  'O posicionamento de {name} � t�o ruim que fica no Macropyre pra se aquecer.',
-  'Dizem que Dota � 5v5. Quando {name} joga, fica 4v6.',
-  '{name} faz blink em 5 her�is e pergunta "cad� meu time?" Meu irm�o em Cristo, VOC� era a inicia��o.',
-  'Se {name} fosse um item do Dota, seria um Iron Branch. �til s� pra encher espa�o.',
+  'O farm de {name} \ufffd t\ufffdo ruim que at\ufffd um Anti-Mage sem BFury ficaria impressionado com o quanto voc\ufffd n\ufffdo farmou.',
+  '{name} tem a consci\ufffdncia de situa\ufffd\ufffdo de uma creep. Na verdade, creeps t\ufffdm melhor pathfinding.',
+  'O posicionamento de {name} \ufffd t\ufffdo ruim que fica no Macropyre pra se aquecer.',
+  'Dizem que Dota \ufffd 5v5. Quando {name} joga, fica 4v6.',
+  '{name} faz blink em 5 her\ufffdis e pergunta "cad\ufffd meu time?" Meu irm\ufffdo em Cristo, VOC\ufffd era a inicia\ufffd\ufffdo.',
+  'Se {name} fosse um item do Dota, seria um Iron Branch. \ufffdtil s\ufffd pra encher espa\ufffdo.',
   '{name} deu ultimate na wave de creeps e disse "calculado".',
-  'O tempo de rea��o de {name} � medido em per�odos geol�gicos.',
-  'Assistir {name} jogar � como assistir um document�rio de natureza  animal confuso em habitat desconhecido.',
+  'O tempo de rea\ufffd\ufffdo de {name} \ufffd medido em per\ufffdodos geol\ufffdgicos.',
+  'Assistir {name} jogar \ufffd como assistir um document\ufffdrio de natureza  animal confuso em habitat desconhecido.',
   '{name} tem mais mortes que um livro do George R.R. Martin.',
-  '{name} pegou Techies. Esse � o roast.',
-  'A maior contribui��o de {name} pro time � entreter os inimigos.',
+  '{name} pegou Techies. Esse \ufffd o roast.',
+  'A maior contribui\ufffd\ufffdo de {name} pro time \ufffd entreter os inimigos.',
   '{name} foi 0/12 e disse que era smurf. Filho, smurfs GANHAM.',
-  'Se {name} fosse um her�i, o ultimate dele seria "Feed": d� ouro passivamente pro inimigo.',
+  'Se {name} fosse um her\ufffdi, o ultimate dele seria "Feed": d\ufffd ouro passivamente pro inimigo.',
 ]
 
 const GENERIC_ROASTS_ENUS = [
@@ -78,36 +78,36 @@ function dataRoastPtBr(
   const lines: string[] = []
 
   if (streak <= -5)
-    lines.push(`${Math.abs(streak)} derrotas seguidas. ${name} entrou no Dota em modo autom�tico de destrui��o de MMR.`)
+    lines.push(`${Math.abs(streak)} derrotas seguidas. ${name} entrou no Dota em modo autom\ufffdtico de destrui\ufffd\ufffdo de MMR.`)
   else if (streak >= 5)
-    lines.push(`Ironicamente, ${name} est� em ${streak} vit�rias seguidas. N�o merece, mas n�o d� pra negar.`)
+    lines.push(`Ironicamente, ${name} est\ufffd em ${streak} vit\ufffdrias seguidas. N\ufffdo merece, mas n\ufffdo d\ufffd pra negar.`)
 
   if (winRate <= 25)
-    lines.push(`${winRate}% de winrate nos �ltimos ${total} jogos. ${name} est� literalmente a pagar MMR alheio.`)
+    lines.push(`${winRate}% de winrate nos \ufffdltimos ${total} jogos. ${name} est\ufffd literalmente a pagar MMR alheio.`)
   else if (winRate >= 75)
-    lines.push(`${winRate}% de winrate nas ultimas ${total} partidas. Isso seria impressionante se n�o fosse suspeito.`)
+    lines.push(`${winRate}% de winrate nas ultimas ${total} partidas. Isso seria impressionante se n\ufffdo fosse suspeito.`)
 
   if (avgDeaths >= 12)
-    lines.push(`M�dia de ${avgDeaths} mortes por jogo. ${name} n�o � um jogador, � um evento de respawn.`)
+    lines.push(`M\ufffddia de ${avgDeaths} mortes por jogo. ${name} n\ufffdo \ufffd um jogador, \ufffd um evento de respawn.`)
   else if (avgDeaths >= 8)
-    lines.push(`${avgDeaths} mortes por jogo em m�dia. ${name} est� distribuindo ouro com a generosidade de uma ONG.`)
+    lines.push(`${avgDeaths} mortes por jogo em m\ufffddia. ${name} est\ufffd distribuindo ouro com a generosidade de uma ONG.`)
 
   if (avgKDA < 1)
-    lines.push(`KDA m�dio de ${avgKDA}. ${name} atrapalha mais do que contribui  matematicamente comprovado.`)
+    lines.push(`KDA m\ufffddio de ${avgKDA}. ${name} atrapalha mais do que contribui  matematicamente comprovado.`)
   else if (avgKDA >= 5)
-    lines.push(`KDA m�dio de ${avgKDA}. E ainda assim o time perde �s vezes. O que diz sobre os colegas de ${name}.`)
+    lines.push(`KDA m\ufffddio de ${avgKDA}. E ainda assim o time perde \ufffds vezes. O que diz sobre os colegas de ${name}.`)
 
   if (feedGames >= 3)
-    lines.push(`Deu 10+ mortes em ${feedGames} das �ltimas ${total} partidas. Isso � padr�o, n�o acidente.`)
+    lines.push(`Deu 10+ mortes em ${feedGames} das \ufffdltimas ${total} partidas. Isso \ufffd padr\ufffdo, n\ufffdo acidente.`)
 
   if (worstDeaths >= 20)
-    lines.push(`O recorde pessoal de ${name} � ${worstDeaths} mortes numa partida. N�o tem emoji pra isso.`)
+    lines.push(`O recorde pessoal de ${name} \ufffd ${worstDeaths} mortes numa partida. N\ufffdo tem emoji pra isso.`)
 
   if (favHero)
-    lines.push(`Her�i favorito: ${favHero}. O ${favHero} viu isso e pediu transfer�ncia.`)
+    lines.push(`Her\ufffdi favorito: ${favHero}. O ${favHero} viu isso e pediu transfer\ufffdncia.`)
 
   if (lines.length === 0)
-    lines.push(`${name} � t�o med�ocre no Dota que nem d� pra zoar direito. Isso � triste de uma forma diferente.`)
+    lines.push(`${name} \ufffd t\ufffdo med\ufffdocre no Dota que nem d\ufffd pra zoar direito. Isso \ufffd triste de uma forma diferente.`)
 
   return lines.join('\n')
 }
@@ -182,17 +182,18 @@ export class RoastHandler {
     //  No Steam ID: generic roast (AI-generated if available, else pool fallback) 
     if (!steamId) {
       const genericPrompt = LANG === 'pt-br'
-        ? `Você é um comediante de roast savage de Dota 2. Escreva 3-4 linhas de piadas sobre um jogador chamado ${targetName} que provavelmente é ruim no Dota. Use humor brasileiro, seja específico e criativo. Sem cabeçalhos, sem markdown, só texto.`
+        ? `Voc\u00ea \u00e9 um comediante de roast savage de Dota 2. Escreva 3-4 linhas de piadas sobre um jogador chamado ${targetName} que provavelmente \u00e9 ruim no Dota. Use humor brasileiro, seja espec\u00edfico e criativo. Sem cabe\u00e7alhos, sem markdown, s\u00f3 texto.`
         : `You are a savage Dota 2 roast comedian. Write 3-4 roast lines about a player named ${targetName} who is probably bad at Dota. Be specific and creative. No headers, no markdown, plain text only.`
       const pool = LANG === 'pt-br' ? GENERIC_ROASTS_PTBR : GENERIC_ROASTS_ENUS
       const poolFallback = pool[Math.floor(Math.random() * pool.length)].replace(/\{name\}/g, targetName)
       const roast = (await askGemini(genericPrompt)) ?? poolFallback
 
+      const requesterName = message.member?.displayName ?? message.author.username
       const embed = new EmbedBuilder()
         .setColor(0xff4500)
         .setTitle(t('roast.title'))
         .setDescription(roast)
-        .setFooter({ text: t('roast.footer', { requester: message.author.username }) })
+        .setFooter({ text: t('roast.footer', { requester: requesterName }) })
 
       await message.channel.send({ embeds: [embed] })
       await message.channel.send(t('roast.noSteam', { name: targetName }))
@@ -210,10 +211,11 @@ export class RoastHandler {
 
     const agg = await MatchHandler.fetchAggregate(accountId, 10)
 
+    const requesterName = message.member?.displayName ?? message.author.username
     const embed = new EmbedBuilder()
       .setColor(0xff4500)
       .setTitle(t('roast.title'))
-      .setFooter({ text: t('roast.footer', { requester: message.author.username }) })
+      .setFooter({ text: t('roast.footer', { requester: requesterName }) })
 
     if (!agg) {
       // Fallback to generic if fetch failed
@@ -258,9 +260,9 @@ export class RoastHandler {
       embed
         .setDescription(roastText)
         .addFields(
-          { name: ' Stats reais', value: `${agg.wins}W/${agg.total - agg.wins}L nos �ltimos ${agg.total} jogos`, inline: true },
+          { name: ' Stats reais', value: `${agg.wins}W/${agg.total - agg.wins}L nos \ufffdltimos ${agg.total} jogos`, inline: true },
           { name: ' Mortes/jogo', value: `${agg.avgDeaths}`, inline: true },
-          { name: ' KDA m�dio', value: `${agg.avgKDA}`, inline: true },
+          { name: ' KDA m\ufffddio', value: `${agg.avgKDA}`, inline: true },
         )
     }
 

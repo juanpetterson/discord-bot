@@ -148,103 +148,103 @@ function commentaryPtBr(ctx: CommentCtx): string {
   //  Special multi-match observations 
   if (agg.currentStreak <= -5)
     return pick([
-      `${name} est� em uma sequ�ncia de ${Math.abs(agg.currentStreak)} DERROTAS seguidas de ${hero}. Essa � a vibe de algu�m que vai desinstalar o Dota essa semana.`,
+      `${name} est\ufffd em uma sequ\ufffdncia de ${Math.abs(agg.currentStreak)} DERROTAS seguidas de ${hero}. Essa \ufffd a vibe de algu\ufffdm que vai desinstalar o Dota essa semana.`,
       `${Math.abs(agg.currentStreak)} derrotas seguidas e ainda voltou. ${name}, tem um limite chamado dignidade.`,
     ])
   if (agg.currentStreak >= 5)
     return pick([
-      `${agg.currentStreak} vit�rias seguidas e ainda jogando ${hero}?? ${name} claramente tomou a dose certa de caf� hoje(s).`,
-      `${name} est� EM CHAMAS  ${agg.currentStreak} wins seguidas! Quem liga pra um n�mero de KDA quando voc� est� sendo RID�CULO assim?`,
+      `${agg.currentStreak} vit\ufffdrias seguidas e ainda jogando ${hero}?? ${name} claramente tomou a dose certa de caf\ufffd hoje(s).`,
+      `${name} est\ufffd EM CHAMAS  ${agg.currentStreak} wins seguidas! Quem liga pra um n\ufffdmero de KDA quando voc\ufffd est\ufffd sendo RID\ufffdCULO assim?`,
     ])
   if (agg.totalFeedGames >= 4)
     return pick([
-      `${name} deu 10+ mortes em ${agg.totalFeedGames} das �ltimas ${agg.total} partidas. Isso n�o � Dota, � doa��o volunt�ria de ouro.`,
-      `An�lise estat�stica: ${name} deu feed em ${agg.totalFeedGames}/${agg.total} partidas recentes. O sistema de detec��o de smurfs n�o existe pra te detectar porque voc� come smurf de caf� da manh�... de baixo.`,
+      `${name} deu 10+ mortes em ${agg.totalFeedGames} das \ufffdltimas ${agg.total} partidas. Isso n\ufffdo \ufffd Dota, \ufffd doa\ufffd\ufffdo volunt\ufffdria de ouro.`,
+      `An\ufffdlise estat\ufffdstica: ${name} deu feed em ${agg.totalFeedGames}/${agg.total} partidas recentes. O sistema de detec\ufffd\ufffdo de smurfs n\ufffdo existe pra te detectar porque voc\ufffd come smurf de caf\ufffd da manh\ufffd... de baixo.`,
     ])
   if (winRate <= 20 && agg.total >= 5)
     return pick([
-      `${winRate}% de winrate nas �ltimas ${agg.total} partidas. ${name} est� tecnicamente a destruir o pr�prio MMR de forma profissional.`,
-      `${agg.wins} vit�rias em ${agg.total} partidas. ${name} est� jogando Dota ou testando a resili�ncia psicol�gica?`,
+      `${winRate}% de winrate nas \ufffdltimas ${agg.total} partidas. ${name} est\ufffd tecnicamente a destruir o pr\ufffdprio MMR de forma profissional.`,
+      `${agg.wins} vit\ufffdrias em ${agg.total} partidas. ${name} est\ufffd jogando Dota ou testando a resili\ufffdncia psicol\ufffdgica?`,
     ])
   if (winRate >= 80 && agg.total >= 5)
     return pick([
-      `${winRate}% de winrate nos �ltimos ${agg.total} jogos  ${name} est� literalmente smurfando ou o MMR do servidor � um jardim de inf�ncia.`,
-      `${name} ganhou ${agg.wins} de ${agg.total} ultimamente. Respeito genu�no. Agora vai pra ranked e estraga a vida de algu�m proporcionalmente treinado.`,
+      `${winRate}% de winrate nos \ufffdltimos ${agg.total} jogos  ${name} est\ufffd literalmente smurfando ou o MMR do servidor \ufffd um jardim de inf\ufffdncia.`,
+      `${name} ganhou ${agg.wins} de ${agg.total} ultimamente. Respeito genu\ufffdno. Agora vai pra ranked e estraga a vida de algu\ufffdm proporcionalmente treinado.`,
     ])
 
   //  Last-match specific 
   if (deaths === 0 && kills >= 10)
     return pick([
-      `IMORTAL! ${name} com ${hero}: ${kills}/${deaths}/${assists}. Zero mortes, ${kills} kills. O inimigo viu voc� e pediu desculpas.`,
-      `${kills}/${deaths}/${assists} de ${hero}  ${name} n�o jogou Dota hoje, ele fez um document�rio sobre genoc�dio.`,
+      `IMORTAL! ${name} com ${hero}: ${kills}/${deaths}/${assists}. Zero mortes, ${kills} kills. O inimigo viu voc\ufffd e pediu desculpas.`,
+      `${kills}/${deaths}/${assists} de ${hero}  ${name} n\ufffdo jogou Dota hoje, ele fez um document\ufffdrio sobre genoc\ufffddio.`,
     ])
   if (deaths === 0 && kills === 0 && won)
     return pick([
-      `${name} ganhou de ${hero} com ${kills}/${deaths}/${assists}. Participa��o: nenhuma. Resultado: vit�ria. M�todo: mist�rio.`,
-      `Arquibancada premium. ${name} ficou 0/0/${assists} de ${hero} e ainda levou XP. Isso � suporte ou aposentadoria antecipada?`,
+      `${name} ganhou de ${hero} com ${kills}/${deaths}/${assists}. Participa\ufffd\ufffdo: nenhuma. Resultado: vit\ufffdria. M\ufffdtodo: mist\ufffdrio.`,
+      `Arquibancada premium. ${name} ficou 0/0/${assists} de ${hero} e ainda levou XP. Isso \ufffd suporte ou aposentadoria antecipada?`,
     ])
   if (deaths >= 20)
     return pick([
       `${deaths} MORTES COM ${hero.toUpperCase()}. ${name}, o respawn tinha fila hoje?`,
-      `${name} morreu ${deaths} vezes de ${hero}. O n�mero de mortes supera a pr�pria dura��o da partida em minutos. Isso � um recorde.`,
-      `${kills}/${deaths}/${assists} de ${hero}. ${name} n�o jogou, ele foi de coelho pra ca�ada.`,
+      `${name} morreu ${deaths} vezes de ${hero}. O n\ufffdmero de mortes supera a pr\ufffdpria dura\ufffd\ufffdo da partida em minutos. Isso \ufffd um recorde.`,
+      `${kills}/${deaths}/${assists} de ${hero}. ${name} n\ufffdo jogou, ele foi de coelho pra ca\ufffdada.`,
     ])
   if (deaths >= 15)
     return pick([
-      `${deaths} mortes de ${hero}. ${name} distribuiu gold como influencer distribuindo c�digo de desconto.`,
-      `${name} com ${hero}: ${kills}/${deaths}/${assists}. O inimigo provavelmente tem um fundo de investimento com o ouro que voc� deu.`,
+      `${deaths} mortes de ${hero}. ${name} distribuiu gold como influencer distribuindo c\ufffddigo de desconto.`,
+      `${name} com ${hero}: ${kills}/${deaths}/${assists}. O inimigo provavelmente tem um fundo de investimento com o ouro que voc\ufffd deu.`,
     ])
   if (gpm < 180 && heroDamage < 8000)
     return pick([
-      `${gpm} GPM e ${heroDamage} de dano de ${hero}. ${name} estava em AFK ou simplesmente invis�vel pro jogo tamb�m?`,
+      `${gpm} GPM e ${heroDamage} de dano de ${hero}. ${name} estava em AFK ou simplesmente invis\ufffdvel pro jogo tamb\ufffdm?`,
       `${name} terminou ${kills}/${deaths}/${assists} de ${hero} com ${gpm} GPM. Uma creep neutral teve mais impacto.`,
     ])
 
   //  Won 
   if (won) {
     if (kda >= 10) return pick([
-      `${name} DESTRUIU de ${hero}: ${kills}/${deaths}/${assists}. KDA ${kda.toFixed(1)}. Isso foi partida ou assalto � m�o armada?`,
-      `${kda.toFixed(1)} de KDA com ${hero}. ${name} hoje n�o era jogador, era fen�meno clim�tico.`,
+      `${name} DESTRUIU de ${hero}: ${kills}/${deaths}/${assists}. KDA ${kda.toFixed(1)}. Isso foi partida ou assalto \ufffd m\ufffdo armada?`,
+      `${kda.toFixed(1)} de KDA com ${hero}. ${name} hoje n\ufffdo era jogador, era fen\ufffdmeno clim\ufffdtico.`,
     ])
     if (kda >= 6) return pick([
-      `Bom jogo, ${name}! ${kills}/${deaths}/${assists} de ${hero}. ${winRate}% winrate recente tamb�m. Perigoso.`,
-      `${name} com ${hero}: ${kills}/${deaths}/${assists}. S�lido, consistente, perigosamente respeit�vel.`,
+      `Bom jogo, ${name}! ${kills}/${deaths}/${assists} de ${hero}. ${winRate}% winrate recente tamb\ufffdm. Perigoso.`,
+      `${name} com ${hero}: ${kills}/${deaths}/${assists}. S\ufffdlido, consistente, perigosamente respeit\ufffdvel.`,
     ])
     if (kda >= 3) return pick([
-      `${name} ganhou com ${hero}, ${kills}/${deaths}/${assists}. Nada �pico, mas pelo menos n�o desonrou a fam�lia.`,
-      `Vit�ria tranquila pra ${name} de ${hero}. ${kills}/${deaths}/${assists}  fez o m�nimo necess�rio e funcionou.`,
+      `${name} ganhou com ${hero}, ${kills}/${deaths}/${assists}. Nada \ufffdpico, mas pelo menos n\ufffdo desonrou a fam\ufffdlia.`,
+      `Vit\ufffdria tranquila pra ${name} de ${hero}. ${kills}/${deaths}/${assists}  fez o m\ufffdnimo necess\ufffdrio e funcionou.`,
     ])
     if (kda >= 1) return pick([
-      `${name} ganhou de ${hero} com ${kills}/${deaths}/${assists}. Claramente carregado, mas ganhou. N�o precisa ser hero pra ganhar.`,
-      `Ganhou com ${hero}, ${kills}/${deaths}/${assists}. ${name} foi o sexto jogador do time advers�rio hoje.`,
+      `${name} ganhou de ${hero} com ${kills}/${deaths}/${assists}. Claramente carregado, mas ganhou. N\ufffdo precisa ser hero pra ganhar.`,
+      `Ganhou com ${hero}, ${kills}/${deaths}/${assists}. ${name} foi o sexto jogador do time advers\ufffdrio hoje.`,
     ])
     return pick([
-      `${name} foi ${kills}/${deaths}/${assists} de ${hero} e ganhou. Parab�ns ao time. Eles salvaram voc�.`,
-      `Vit�ria! Mas ${name} de ${hero} com ${kills}/${deaths}/${assists}... voc� contribuiu ou assistiu?`,
+      `${name} foi ${kills}/${deaths}/${assists} de ${hero} e ganhou. Parab\ufffdns ao time. Eles salvaram voc\ufffd.`,
+      `Vit\ufffdria! Mas ${name} de ${hero} com ${kills}/${deaths}/${assists}... voc\ufffd contribuiu ou assistiu?`,
     ])
   }
 
   //  Lost 
   if (kda >= 6) return pick([
-    `${name} foi ${kills}/${deaths}/${assists} de ${hero} e PERDEU. Com esse KDA voc� deveria ter impedido isso. O que deu errado?`,
-    `${kills}/${deaths}/${assists} de ${hero} e ainda caiu. ${name} deveria processar os teammates por neglig�ncia.`,
+    `${name} foi ${kills}/${deaths}/${assists} de ${hero} e PERDEU. Com esse KDA voc\ufffd deveria ter impedido isso. O que deu errado?`,
+    `${kills}/${deaths}/${assists} de ${hero} e ainda caiu. ${name} deveria processar os teammates por neglig\ufffdncia.`,
   ])
   if (kda >= 3) return pick([
-    `${name} foi ${kills}/${deaths}/${assists} de ${hero} e perdeu. Contribuiu. N�o salvou. Acontece.`,
-    `Derrota com ${hero}: ${kills}/${deaths}/${assists}. ${name} fez a parte dele. Os outros... n�o tanto.`,
+    `${name} foi ${kills}/${deaths}/${assists} de ${hero} e perdeu. Contribuiu. N\ufffdo salvou. Acontece.`,
+    `Derrota com ${hero}: ${kills}/${deaths}/${assists}. ${name} fez a parte dele. Os outros... n\ufffdo tanto.`,
   ])
   if (kda >= 1.5) return pick([
-    `${kills}/${deaths}/${assists} de ${hero} e perdeu. ${name} ajudou mais do que atrapalhou? Tenho d�vidas s�rias.`,
-    `${name} com ${hero}: ${kills}/${deaths}/${assists}. Jogo mediocre, resultado mediocre. Pr�xima partida.`,
+    `${kills}/${deaths}/${assists} de ${hero} e perdeu. ${name} ajudou mais do que atrapalhou? Tenho d\ufffdvidas s\ufffdrias.`,
+    `${name} com ${hero}: ${kills}/${deaths}/${assists}. Jogo mediocre, resultado mediocre. Pr\ufffdxima partida.`,
   ])
   if (kda >= 0.5) return pick([
-    `${name} de ${hero}: ${kills}/${deaths}/${assists} e derrota. Isso foi... ruim. Por respeito n�o vou detalhar.`,
-    `${kills}/${deaths}/${assists} de ${hero} e perdeu. ${name}, voc� veio jogar Dota ou entregar comida pro inimigo?`,
+    `${name} de ${hero}: ${kills}/${deaths}/${assists} e derrota. Isso foi... ruim. Por respeito n\ufffdo vou detalhar.`,
+    `${kills}/${deaths}/${assists} de ${hero} e perdeu. ${name}, voc\ufffd veio jogar Dota ou entregar comida pro inimigo?`,
   ])
   return pick([
-    `Epit�fio de ${name}: "${kills}/${deaths}/${assists} de ${hero}. Achou que estava bem."`,
-    `${name} com ${hero}: ${kills}/${deaths}/${assists}. Derrota merecida. N�o precisa de an�lise.`,
-    `${kills}/${deaths}/${assists} de ${hero} e perdeu. ${name} n�o jogou Dota, jogou um simulador de feeding.`,
+    `Epit\ufffdfio de ${name}: "${kills}/${deaths}/${assists} de ${hero}. Achou que estava bem."`,
+    `${name} com ${hero}: ${kills}/${deaths}/${assists}. Derrota merecida. N\ufffdo precisa de an\ufffdlise.`,
+    `${kills}/${deaths}/${assists} de ${hero} e perdeu. ${name} n\ufffdo jogou Dota, jogou um simulador de feeding.`,
   ])
 }
 
@@ -452,11 +452,11 @@ export class MatchHandler {
           { name: t('match.fieldKDA'), value: `**${m.kills}/${m.deaths}/${m.assists}** (${kda.toFixed(1)})`, inline: true },
           { name: t('match.fieldGPMXPM'), value: `${m.gold_per_min} / ${m.xp_per_min}`, inline: true },
           { name: t('match.fieldDuration'), value: formatDuration(m.duration), inline: true },
-          { name: t('match.fieldLastHits'), value: `${m.last_hits} / ${m.denies}`, inline: true },
+          { name: t('match.fieldLastHits'), value: `${m.last_hits ?? 0} / ${m.denies ?? 0}`, inline: true },
           { name: t('match.fieldHeroDmg'), value: (m.hero_damage ?? 0).toLocaleString(), inline: true },
           { name: t('match.fieldTowerDmg'), value: (m.tower_damage ?? 0).toLocaleString(), inline: true },
           { name: t('match.fieldHealing'), value: (m.hero_healing ?? 0).toLocaleString(), inline: true },
-          { name: t('match.fieldLevel'), value: `${m.level}`, inline: true },
+          { name: t('match.fieldLevel'), value: `${m.level ?? '-'}`, inline: true },
           { name: t('match.fieldMode'), value: GAME_MODES[m.game_mode] ?? 'Unknown', inline: true },
           { name: t('match.fieldTrend', { count: agg.total }), value: trendLines, inline: false },
         )
