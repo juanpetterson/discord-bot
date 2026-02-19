@@ -1,6 +1,7 @@
 import { Message, EmbedBuilder } from 'discord.js'
 import fs from 'fs'
 import https from 'https'
+import { t } from '../i18n'
 
 const BETS_FILE = './src/assets/data/bets.json'
 
@@ -178,17 +179,13 @@ export class BetHandler {
     const parts = args.trim().split(/\s+/)
 
     if (parts.length < 2) {
-      message.reply(
-        'Usage: `!bet @player nós` or `!bet @player eles`\n' +
-          '> **nós** / **nos** → player **wins**\n' +
-          '> **eles** → player **loses**'
-      )
+      message.reply(t('bet.usage'))
       return
     }
 
     const mention = message.mentions.users.first()
     if (!mention) {
-      message.reply('You must mention a player. Example: `!bet @ruro nós`')
+      message.reply(t('bet.noTarget'))
       return
     }
 
@@ -200,7 +197,7 @@ export class BetHandler {
     } else if (rawPrediction === 'eles') {
       prediction = 'lose'
     } else {
-      message.reply('Prediction must be **nós** (win) or **eles** (lose).')
+      message.reply(t('bet.invalidChoice'))
       return
     }
 
@@ -217,7 +214,7 @@ export class BetHandler {
     )
     if (existingBet) {
       message.reply(
-        `You already have an active bet on **${existingBet.targetDotaNick}** (${existingBet.prediction}). Use \`!cancelbet @${mention.username}\` first.`
+        t('bet.alreadyBetOn', { nick: existingBet.targetDotaNick, pred: existingBet.prediction, user: mention.username })
       )
       return
     }
@@ -237,12 +234,12 @@ export class BetHandler {
 
     saveBets(data)
 
-    const predLabel = prediction === 'win' ? '🏆 WIN' : '💀 LOSE'
+    const predLabel = prediction === 'win' ? t('bet.predWin') : t('bet.predLose')
     const embed = new EmbedBuilder()
       .setColor(prediction === 'win' ? 0x00cc66 : 0xff3333)
-      .setTitle('🎰 Bet Placed!')
-      .setDescription(`**${bettorDisplayName}** bets that **${targetDotaNick}** will **${predLabel}**!`)
-      .setFooter({ text: `!cancelbet @${mention.username} to cancel | !bets to see active bets` })
+      .setTitle(t('bet.betTitle'))
+      .setDescription(t('bet.betDesc', { bettor: bettorDisplayName, pred: predLabel, target: targetDotaNick }))
+      .setFooter({ text: t('bet.betFooter', { user: mention.username }) })
 
     message.channel.send({ embeds: [embed] })
   }
@@ -253,21 +250,21 @@ export class BetHandler {
    */
   static async resolveByMatch(message: Message, matchId: string) {
     if (!matchId || isNaN(Number(matchId))) {
-      message.reply('Usage: `!betwin <matchId>`')
+      message.reply(t('bet.resolveUsage'))
       return
     }
 
-    await message.channel.send(`🔍 Fetching match **${matchId}** from OpenDota...`)
+    await message.channel.send(t('bet.resolveStart', { id: matchId }))
 
     const match = await fetchMatch(matchId)
     if (!match || !match.players) {
-      message.reply(`❌ Could not fetch match **${matchId}**. Make sure it's a valid match ID.`)
+      message.reply(t('bet.resolveFailed', { id: matchId }))
       return
     }
 
     const data = loadBets()
     if (data.activeBets.length === 0) {
-      message.reply('No active bets to resolve.')
+      message.reply(t('bet.resolveNoActive'))
       return
     }
 
@@ -277,7 +274,7 @@ export class BetHandler {
       const steamId = DISCORD_TO_STEAM[bet.targetName]
       if (!steamId) {
         console.log(`[BetHandler] No Steam ID for ${bet.targetName} — cannot resolve`)
-        results.push(`⚠️ **${bet.bettorName}** → ${bet.targetName}: no Steam ID mapped, skipped.`)
+        results.push(t('bet.resolveSkipped', { bettor: bet.bettorName, target: bet.targetName }))
         continue
       }
 
@@ -286,7 +283,7 @@ export class BetHandler {
 
       if (!player) {
         console.log(`[BetHandler] ${bet.targetName} (steam32: ${steamId}) not found in match ${matchId}`)
-        results.push(`⚠️ **${bet.bettorName}** → ${bet.targetName}: not found in this match.`)
+        results.push(t('bet.resolveNotInMatch', { bettor: bet.bettorName, target: bet.targetName }))
         continue
       }
 
@@ -296,17 +293,18 @@ export class BetHandler {
 
       const bettorStats = ensurePlayer(data, bet.bettorId, bet.bettorName)
 
+      const resolveLabel = bet.prediction === 'win' ? t('bet.predWin') : t('bet.predLose')
       if (betWon) {
         bettorStats.points += 100
         bettorStats.wins++
         results.push(
-          `✅ **${bet.bettorDisplayName ?? bet.bettorName}** WON! (+100 pts) — bet **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}** on **${bet.targetDotaNick ?? bet.targetName}** — Balance: **${bettorStats.points}**`
+          t('bet.resolveWon', { bettor: bet.bettorDisplayName ?? bet.bettorName, pred: resolveLabel, target: bet.targetDotaNick ?? bet.targetName, pts: bettorStats.points })
         )
       } else {
         bettorStats.points = Math.max(0, bettorStats.points - 50)
         bettorStats.losses++
         results.push(
-          `❌ **${bet.bettorDisplayName ?? bet.bettorName}** LOST! (-50 pts) — bet **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}** on **${bet.targetDotaNick ?? bet.targetName}** — Balance: **${bettorStats.points}**`
+          t('bet.resolveLost', { bettor: bet.bettorDisplayName ?? bet.bettorName, pred: resolveLabel, target: bet.targetDotaNick ?? bet.targetName, pts: bettorStats.points })
         )
       }
 
@@ -317,9 +315,9 @@ export class BetHandler {
 
     const embed = new EmbedBuilder()
       .setColor(0xffd700)
-      .setTitle(`🏁 Match ${matchId} — Bet Results`)
-      .setDescription(results.join('\n') || 'No bets were resolved.')
-      .setFooter({ text: `Match ID: ${matchId}` })
+      .setTitle(t('bet.resolveTitle', { id: matchId }))
+      .setDescription(results.join('\n') || t('bet.resolveEmpty'))
+      .setFooter({ text: t('bet.resolveFooter', { id: matchId }) })
 
     message.channel.send({ embeds: [embed] })
   }
@@ -330,7 +328,7 @@ export class BetHandler {
   static async cancelBet(message: Message) {
     const mention = message.mentions.users.first()
     if (!mention) {
-      message.reply('Usage: `!cancelbet @player` — mention the player you bet on.')
+      message.reply(t('bet.cancelUsage'))
       return
     }
 
@@ -341,14 +339,15 @@ export class BetHandler {
 
     if (idx === -1) {
       const nick = await fetchDotaNick(DISCORD_TO_STEAM[mention.username], mention.username)
-      message.reply(`You don't have an active bet on **${nick}**.`)
+      message.reply(t('bet.cancelNoBet', { nick }))
       return
     }
 
     const bet = data.activeBets.splice(idx, 1)[0]
     saveBets(data)
 
-    message.reply(`🔄 Bet cancelled. You had bet **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}** on **${bet.targetDotaNick}**.`)
+    const cancelLabel = bet.prediction === 'win' ? t('bet.predWin') : t('bet.predLose')
+    message.reply(t('bet.cancelConfirm', { pred: cancelLabel, nick: bet.targetDotaNick }))
   }
 
   /**
@@ -358,22 +357,22 @@ export class BetHandler {
     const data = loadBets()
 
     if (data.activeBets.length === 0) {
-      message.reply('No active bets! Use `!bet @player nós` or `!bet @player eles`')
+      message.reply(t('bet.noActiveBetsMore'))
       return
     }
 
     const betsText = data.activeBets
       .map(
         (bet, i) =>
-          `${i + 1}. **${bet.bettorDisplayName ?? bet.bettorName}** → **${bet.targetDotaNick ?? bet.targetName}**: **${bet.prediction === 'win' ? '🏆 WIN' : '💀 LOSE'}**`
+          `${i + 1}. **${bet.bettorDisplayName ?? bet.bettorName}** → **${bet.targetDotaNick ?? bet.targetName}**: **${bet.prediction === 'win' ? t('bet.predWin') : t('bet.predLose')}**`
       )
       .join('\n')
 
     const embed = new EmbedBuilder()
       .setColor(0xffa500)
-      .setTitle('🎰 Active Bets')
+      .setTitle(t('bet.activeBetsTitle'))
       .setDescription(betsText)
-      .setFooter({ text: '!betwin <matchId> to resolve | !cancelbet @player to cancel' })
+      .setFooter({ text: t('bet.activeBetsFooter') })
 
     message.channel.send({ embeds: [embed] })
   }
@@ -386,7 +385,7 @@ export class BetHandler {
     const entries = Object.entries(data.leaderboard)
 
     if (entries.length === 0) {
-      message.reply('No bets have been placed yet!')
+      message.reply(t('bet.leaderboardNoData'))
       return
     }
 
@@ -403,9 +402,9 @@ export class BetHandler {
 
     const embed = new EmbedBuilder()
       .setColor(0xffd700)
-      .setTitle('🏆 Betting Leaderboard')
+      .setTitle(t('bet.leaderboardTitle'))
       .setDescription(leaderboardText)
-      .setFooter({ text: 'Win: +100 pts | Lose: -50 pts | Everyone starts at 1000' })
+      .setFooter({ text: t('bet.leaderboardFooter') })
 
     message.channel.send({ embeds: [embed] })
   }
@@ -419,7 +418,7 @@ export class BetHandler {
     saveBets(data)
 
     message.reply(
-      `💰 **${message.author.username}** — Balance: **${player.points}** pts | ${player.wins}W / ${player.losses}L`
+      t('bet.balanceLine', { name: message.author.username, pts: player.points, wins: player.wins, losses: player.losses })
     )
   }
 }

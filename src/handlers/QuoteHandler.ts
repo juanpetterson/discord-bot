@@ -1,6 +1,7 @@
 import { Message, EmbedBuilder } from 'discord.js'
 import fs from 'fs'
 import path from 'path'
+import { t } from '../i18n'
 
 const QUOTES_FILE = './src/assets/data/quotes.json'
 
@@ -49,7 +50,6 @@ export class QuoteHandler {
 
     if (quotedMatch) {
       text = quotedMatch[1].trim()
-      // Check if there's a mention
       const mention = message.mentions.users.first()
       author = mention ? mention.displayName || mention.username : quotedMatch[2].trim()
     } else if (dashMatch) {
@@ -57,12 +57,12 @@ export class QuoteHandler {
       const mention = message.mentions.users.first()
       author = mention ? mention.displayName || mention.username : dashMatch[2].trim()
     } else {
-      message.reply('Usage: `!addquote "text" author` or `!addquote text - author`')
+      message.reply(t('quote.usage'))
       return
     }
 
     if (!text || !author) {
-      message.reply('Usage: `!addquote "text" author` or `!addquote text - author`')
+      message.reply(t('quote.usage'))
       return
     }
 
@@ -78,7 +78,7 @@ export class QuoteHandler {
     quotes.push(newQuote)
     saveQuotes(quotes)
 
-    message.channel.send(`💬 Quote #${newQuote.id} added!\n> "${text}" — *${author}*`)
+    message.channel.send(t('quote.added', { id: newQuote.id, text, author }))
   }
 
   static getRandomQuote(message: Message) {
@@ -94,7 +94,7 @@ export class QuoteHandler {
     const embed = new EmbedBuilder()
       .setColor(0xffd700)
       .setDescription(`> "${randomQuote.text}"`)
-      .setFooter({ text: `— ${randomQuote.author} | Quote #${randomQuote.id} | Added by ${randomQuote.addedBy}` })
+      .setFooter({ text: t('quote.footer', { author: randomQuote.author, id: randomQuote.id, addedBy: randomQuote.addedBy }) })
 
     message.channel.send({ embeds: [embed] })
   }
@@ -103,7 +103,7 @@ export class QuoteHandler {
     const quotes = loadQuotes()
 
     if (quotes.length === 0) {
-      message.reply('No quotes saved yet! Add one with `!addquote "text" author`')
+      message.reply(t('quote.empty'))
       return
     }
 
@@ -114,9 +114,9 @@ export class QuoteHandler {
 
     const embed = new EmbedBuilder()
       .setColor(0xffd700)
-      .setTitle('📜 Recent Quotes')
+      .setTitle(t('quote.listTitle'))
       .setDescription(quoteList)
-      .setFooter({ text: `Total quotes: ${quotes.length}` })
+      .setFooter({ text: `Total: ${quotes.length}` })
 
     message.channel.send({ embeds: [embed] })
   }
@@ -132,13 +132,13 @@ export class QuoteHandler {
     const index = quotes.findIndex((q) => q.id === id)
 
     if (index === -1) {
-      message.reply(`Quote #${id} not found!`)
+      message.reply(t('quote.deleteNotFound', { id }))
       return
     }
 
     const removed = quotes.splice(index, 1)[0]
     saveQuotes(quotes)
 
-    message.channel.send(`🗑️ Deleted quote #${id}: "${removed.text}" — *${removed.author}*`)
+    message.channel.send(t('quote.deleteSuccess', { id }))
   }
 }

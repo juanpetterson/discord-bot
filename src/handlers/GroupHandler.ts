@@ -1,4 +1,5 @@
 import { Message, GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from 'discord.js'
+import { t } from '../i18n'
 
 // Dota 2 roles per slot index (0-4 = team A, 5-9 = team B)
 const ROLES = ['Hard Carry', 'Mid Lane', 'Offlane', 'Soft Support', 'Hard Support']
@@ -40,9 +41,7 @@ export class GroupHandler {
     if (existing) {
       // Trying same size → join
       if (existing.size !== size) {
-        message.reply(
-          `There is already an active **!x${existing.size}** group. Use \`!x${existing.size}\` to join it or wait until it ends.`
-        )
+        message.reply(t('group.alreadyExists', { size: existing.size }))
         return
       }
       return GroupHandler._addMember(message, existing)
@@ -66,11 +65,11 @@ export class GroupHandler {
     const totalSlots = group.size * 2
     const alreadyIn = group.members.some((m) => m.id === message.author.id)
     if (alreadyIn) {
-      message.reply('You are already in this group!')
+      message.reply(t('group.alreadyIn'))
       return
     }
     if (group.members.length >= totalSlots) {
-      message.reply('This group is already full!')
+      message.reply(t('group.groupFull'))
       return
     }
     const displayName = message.member?.displayName ?? message.author.username
@@ -88,13 +87,13 @@ export class GroupHandler {
   static async leave(message: Message) {
     const group = activeGroups.get(message.channel.id)
     if (!group) {
-      message.reply('No active group in this channel.')
+      message.reply(t('group.noGroup'))
       return
     }
 
     const idx = group.members.findIndex((m) => m.id === message.author.id)
     if (idx === -1) {
-      message.reply('You are not in this group.')
+      message.reply(t('group.alreadyIn'))
       return
     }
 
@@ -103,7 +102,7 @@ export class GroupHandler {
 
     if (group.members.length === 0) {
       activeGroups.delete(message.channel.id)
-      message.channel.send('🚫 Group disbanded (no members left).')
+      message.channel.send(t('group.disbanded.empty'))
       return
     }
 
@@ -112,11 +111,11 @@ export class GroupHandler {
     if (group.creatorId === leaving.id) {
       group.creatorId = group.members[0].id
       group.creatorName = group.members[0].name
-      creatorNote = ` New creator: **${group.creatorName}**.`
+      creatorNote = ' ' + t('group.promoted', { name: group.creatorName })
     }
 
     console.log(`[GroupHandler] ${leaving.name} left x${group.size} group`)
-    await message.channel.send(`👋 **${leaving.name}** left the group.${creatorNote}`)
+    await message.channel.send(t('group.left', { name: leaving.name }) + creatorNote)
     await GroupHandler._sendGroupStatus(message.channel, group)
   }
 
@@ -124,41 +123,40 @@ export class GroupHandler {
   static cancel(message: Message) {
     const group = activeGroups.get(message.channel.id)
     if (!group) {
-      message.reply('No active group in this channel.')
+      message.reply(t('group.noGroup'))
       return
     }
     if (group.creatorId !== message.author.id) {
-      message.reply('Only the group creator can cancel it.')
+      message.reply(t('group.notCreator'))
       return
     }
     activeGroups.delete(message.channel.id)
     console.log(`[GroupHandler] x${group.size} group cancelled by ${message.author.username}`)
-    message.channel.send('🚫 Group cancelled.')
+    message.channel.send(t('group.cancelled', { name: message.member?.displayName ?? message.author.username }))
   }
 
   // ─── !x4kick / !x5kick <nickname> ────────────────────────────────────────
   static async kick(message: Message, partialName: string) {
     const group = activeGroups.get(message.channel.id)
     if (!group) {
-      message.reply('No active group in this channel.')
+      message.reply(t('group.noGroup'))
       return
     }
     if (group.creatorId !== message.author.id) {
-      message.reply('Only the group creator can kick members.')
+      message.reply(t('group.notCreator'))
       return
     }
-    // Fuzzy match
     const lower = partialName.toLowerCase()
     const target = group.members.find(
       (m) => m.id !== group.creatorId && m.name.toLowerCase().includes(lower)
     )
     if (!target) {
-      message.reply(`Could not find a member matching **${partialName}**.`)
+      message.reply(t('group.memberNotFound', { name: partialName }))
       return
     }
     group.members = group.members.filter((m) => m.id !== target.id)
     console.log(`[GroupHandler] ${target.name} kicked from x${group.size} group by creator`)
-    message.channel.send(`👢 **${target.name}** was kicked from the group.`)
+    message.channel.send(t('group.kicked', { name: target.name }))
     await GroupHandler._sendGroupStatus(message.channel, group)
   }
 
@@ -170,16 +168,16 @@ export class GroupHandler {
     if (interaction.customId === 'group_join') {
       const group = activeGroups.get(channelId)
       if (!group) {
-        await interaction.reply({ content: '❌ The group no longer exists.', ephemeral: true })
+        await interaction.reply({ content: t('group.noGroup'), ephemeral: true })
         return
       }
       const totalSlots = group.size * 2
       if (group.members.some((m) => m.id === interaction.user.id)) {
-        await interaction.reply({ content: 'You are already in this group!', ephemeral: true })
+        await interaction.reply({ content: t('group.alreadyIn'), ephemeral: true })
         return
       }
       if (group.members.length >= totalSlots) {
-        await interaction.reply({ content: 'This group is already full!', ephemeral: true })
+        await interaction.reply({ content: t('group.groupFull'), ephemeral: true })
         return
       }
       const displayName = interaction.member?.displayName ?? interaction.user.username
@@ -192,13 +190,16 @@ export class GroupHandler {
       } else {
         await GroupHandler._sendGroupStatus(interaction.channel, group)
       }
+      if (group.members.length === totalSlots) {
+        await interaction.channel.send(t('group.joined', { name: interaction.member?.displayName ?? interaction.user.username }))
+      }
       return
     }
 
     if (interaction.customId === 'group_random_teams') {
       const group = activeGroups.get(channelId)
       if (!group) {
-        interaction.reply({ content: 'No active group found.', ephemeral: true })
+        interaction.reply({ content: t('group.noGroup'), ephemeral: true })
         return
       }
       await interaction.deferUpdate()
@@ -210,7 +211,7 @@ export class GroupHandler {
     if (interaction.customId === 'group_random_teams_heroes') {
       const group = activeGroups.get(channelId)
       if (!group) {
-        interaction.reply({ content: 'No active group found.', ephemeral: true })
+        interaction.reply({ content: t('group.noGroup'), ephemeral: true })
         return
       }
       await interaction.deferUpdate()
@@ -222,7 +223,7 @@ export class GroupHandler {
     if (interaction.customId === 'group_assign_heroes') {
       const stored = lastTeams.get(channelId)
       if (!stored) {
-        interaction.reply({ content: 'No team data found — run the auto command again.', ephemeral: true })
+        interaction.reply({ content: t('group.noTeamData'), ephemeral: true })
         return
       }
       await interaction.deferUpdate()
@@ -234,7 +235,7 @@ export class GroupHandler {
     if (interaction.customId === 'group_split_channels') {
       const stored = lastTeams.get(channelId)
       if (!stored) {
-        interaction.reply({ content: 'No team data found — randomize teams first.', ephemeral: true })
+        interaction.reply({ content: t('group.noTeamData'), ephemeral: true })
         return
       }
       await interaction.deferUpdate()
@@ -256,14 +257,14 @@ export class GroupHandler {
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle(`🎮 x${group.size} Group (${group.size}v${group.size}) — ${group.members.length}/${totalSlots}`)
-      .setDescription(memberList || 'No members yet.')
-      .setFooter({ text: `${spots} spot(s) remaining | click the button or type !x${group.size} to join` })
+      .setTitle(t('group.statusTitle', { size: group.size, current: group.members.length, total: totalSlots }))
+      .setDescription(memberList || '...')
+      .setFooter({ text: `${spots} spot(s) remaining | !x${group.size}` })
 
     const joinRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('group_join')
-        .setLabel('➕ Join Group')
+        .setLabel(t('group.btnJoin'))
         .setStyle(ButtonStyle.Primary)
     )
 
@@ -275,18 +276,18 @@ export class GroupHandler {
 
     const embed = new EmbedBuilder()
       .setColor(0x00ff99)
-      .setTitle(`✅ x${group.size} Group (${group.size}v${group.size}) — FULL!`)
+      .setTitle(t('group.fullTitle', { size: group.size }))
       .setDescription(memberList)
-      .setFooter({ text: 'Choose an action below' })
+      .setFooter({ text: '⬇️' })
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('group_random_teams')
-        .setLabel('🎲 Random Teams')
+        .setLabel(t('group.btnRandomTeams'))
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId('group_random_teams_heroes')
-        .setLabel('⚔️ Random Teams + Heroes')
+        .setLabel(t('group.btnRandomTeamsHeroes'))
         .setStyle(ButtonStyle.Success)
     )
 
@@ -327,15 +328,15 @@ export class GroupHandler {
 
     const embed = new EmbedBuilder()
       .setColor(0x3071f7)
-      .setTitle('🎲 Random Teams')
+      .setTitle(t('group.btnRandomTeams'))
       .addFields(
         {
-          name: '🔵 Team A',
+          name: t('group.teamATitle'),
           value: teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'),
           inline: true,
         },
         {
-          name: '🔴 Team B',
+          name: t('group.teamBTitle'),
           value: teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'),
           inline: true,
         }
@@ -344,7 +345,7 @@ export class GroupHandler {
     const moveRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('group_split_channels')
-        .setLabel('🔀 Move to Channels')
+        .setLabel(t('group.btnMoveChannels'))
         .setStyle(ButtonStyle.Secondary)
     )
 
@@ -400,16 +401,16 @@ export class GroupHandler {
 
     const embed = new EmbedBuilder()
       .setColor(0x00ff99)
-      .setTitle('⚔️ Random Teams + Heroes')
+      .setTitle(t('group.btnRandomTeamsHeroes'))
       .addFields(
-        { name: '🔵 Team A', value: teamValue(assignA), inline: true },
-        { name: '🔴 Team B', value: teamValue(assignB), inline: true }
+        { name: t('group.teamATitle'), value: teamValue(assignA), inline: true },
+        { name: t('group.teamBTitle'), value: teamValue(assignB), inline: true }
       )
 
     const moveRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('group_split_channels')
-        .setLabel('🔀 Move to Channels')
+        .setLabel(t('group.btnMoveChannels'))
         .setStyle(ButtonStyle.Secondary)
     )
 
@@ -457,7 +458,7 @@ export class GroupHandler {
     ) as any
 
     if (!otherChannel) {
-      await interaction.channel.send('⚠️ No second voice channel found — please split teams manually.')
+      await interaction.channel.send(t('group.noSecondChannel'))
       return
     }
 
@@ -479,14 +480,14 @@ export class GroupHandler {
     if (moved.length === 0 && failed.length === 0) return // nobody was in voice
 
     const lines = [
-      `🔵 **Team A** → moved to **${otherChannel.name}**`,
-      `🔴 **Team B** → stays in **${homeChannel.name}**`,
+      t('group.splitTeamA', { channel: otherChannel.name }),
+      t('group.splitTeamB', { channel: homeChannel.name }),
     ]
-    if (failed.length) lines.push(`⚠️ Could not move: ${failed.join(', ')}`)
+    if (failed.length) lines.push(t('group.splitFailed', { names: failed.join(', ') }))
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle('🔀 Voice Channels Split')
+      .setTitle(t('group.splitTitle'))
       .setDescription(lines.join('\n'))
 
     await interaction.channel.send({ embeds: [embed] })
@@ -507,7 +508,7 @@ export class GroupHandler {
     const voiceMember = message.member
 
     if (!voiceMember?.voice?.channel) {
-      message.reply('You need to be in a voice channel to use `!autox`!')
+      message.reply(t('group.autoNotInVoice', { size }))
       return
     }
 
@@ -519,11 +520,7 @@ export class GroupHandler {
       .map((m: GuildMember) => ({ id: m.id, name: m.displayName }))
 
     if (candidates.length < totalSlots) {
-      const excludedList = excludedIds.size ? ` (after excluding ${excludedIds.size} player(s))` : ''
-      message.reply(
-        `Need at least **${totalSlots}** eligible players in the voice channel${excludedList}. ` +
-        `Found **${candidates.length}**.`
-      )
+      message.reply(t('group.autoNotEnough', { need: totalSlots, found: candidates.length }))
       return
     }
 
@@ -545,21 +542,21 @@ export class GroupHandler {
 
     const teamsEmbed = new EmbedBuilder()
       .setColor(0x3071f7)
-      .setTitle(`🤖 Auto x${size} — Teams Randomized`)
+      .setTitle(`🤖 Auto x${size}`)
       .addFields(
-        { name: '🔵 Team A', value: teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true },
-        { name: '🔴 Team B', value: teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true }
+        { name: t('group.teamATitle'), value: teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true },
+        { name: t('group.teamBTitle'), value: teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true }
       )
-      .setFooter({ text: `!x${size}cancel to disband | !x${size}kick <nick> to remove a player` })
+      .setFooter({ text: `!x${size}cancel | !x${size}kick <nick>` })
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('group_assign_heroes')
-        .setLabel('⚔️ Assign Heroes')
+        .setLabel(t('group.btnAssignHeroes'))
         .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
         .setCustomId('group_split_channels')
-        .setLabel('🔀 Move to Channels')
+        .setLabel(t('group.btnMoveChannels'))
         .setStyle(ButtonStyle.Secondary)
     )
 
@@ -583,7 +580,7 @@ export class GroupHandler {
       if (group.members.length === 0) {
         activeGroups.delete(channelId)
         console.log(`[GroupHandler] ${member.name} left voice — group empty, disbanded`)
-        if (textChannel) await textChannel.send(`🚫 **${member.name}** left — group disbanded (no members left).`)
+        if (textChannel) await textChannel.send(t('group.disbanded.empty'))
         break
       }
 
@@ -597,11 +594,7 @@ export class GroupHandler {
 
       console.log(`[GroupHandler] ${member.name} left voice — removed from x${group.size} group`)
       if (textChannel) {
-        const totalSlots = group.size * 2
-        await textChannel.send(
-          `👋 **${member.name}** left the voice channel and was removed from the x${group.size} group. ` +
-          `(${group.members.length}/${totalSlots})${creatorNote}`
-        )
+        await textChannel.send(t('group.voiceLeft', { name: member.name }) + creatorNote)
       }
       break
     }

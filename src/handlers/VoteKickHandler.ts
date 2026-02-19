@@ -1,4 +1,5 @@
 import { Message, GuildMember } from 'discord.js'
+import { t } from '../i18n'
 
 interface VoteKickSession {
   targetMember: GuildMember
@@ -24,13 +25,13 @@ export class VoteKickHandler {
 
     const channel = message.member?.voice.channel
     if (!channel) {
-      message.reply('You need to be in a voice channel to start a votekick!')
+      message.reply(t('votekick.notInVoice'))
       return
     }
 
     // Check if there's already an active votekick
     if (activeVoteKicks.has(guild.id)) {
-      message.reply('There\'s already an active votekick! Wait for it to finish.')
+      message.reply(t('votekick.alreadyActive'))
       return
     }
 
@@ -40,7 +41,7 @@ export class VoteKickHandler {
     )
 
     if (members.size <= 2) {
-      message.reply('Need at least 3 people in the channel to start a votekick!')
+      message.reply(t('votekick.notEnoughPeople'))
       return
     }
 
@@ -94,7 +95,7 @@ export class VoteKickHandler {
     })
 
     if (!bestMatch) {
-      message.reply(`Could not find anyone matching "${targetName}" in the voice channel.`)
+      message.reply(t('votekick.notFound', { name: targetName }))
       return
     }
 
@@ -102,7 +103,7 @@ export class VoteKickHandler {
 
     // Don't allow kicking yourself
     if (target.id === message.author.id) {
-      message.reply('You can\'t votekick yourself! 🤡')
+      message.reply(t('votekick.selfKick'))
       return
     }
 
@@ -129,11 +130,12 @@ export class VoteKickHandler {
     const currentVotes = session.voters.size
 
     message.channel.send(
-      `🗳️ **VOTEKICK** initiated by **${message.member?.displayName}**!\n\n` +
-      `Target: **${target.displayName}**\n` +
-      `Votes: ${currentVotes}/${requiredVotes}\n\n` +
-      `Type \`!voteyes\` to vote for the kick.\n` +
-      `⏱️ You have 60 seconds to vote!`
+      t('votekick.initiated', {
+        initiator: message.member?.displayName ?? '',
+        target: target.displayName,
+        current: currentVotes,
+        required: requiredVotes,
+      })
     )
 
     // Check if the initiator's vote alone is enough (e.g., 2 voters, need 2, initiator = 1... no)
@@ -189,11 +191,11 @@ export class VoteKickHandler {
 
     try {
       const kickMessages = [
-        `🦶 **${session.targetMember.displayName}** has been KICKED by democracy! The people have spoken! 🗳️`,
-        `👢 **${session.targetMember.displayName}** was voted off the island! 🏝️`,
-        `🚪 **${session.targetMember.displayName}** — the door is that way → 🚶`,
-        `⚖️ The court has decided: **${session.targetMember.displayName}** is GUILTY. Disconnected! 🔨`,
-        `🎪 **${session.targetMember.displayName}** has left the circus! 🤡`,
+        t('votekick.kicked1', { name: session.targetMember.displayName }),
+        t('votekick.kicked2', { name: session.targetMember.displayName }),
+        t('votekick.kicked3', { name: session.targetMember.displayName }),
+        t('votekick.kicked4', { name: session.targetMember.displayName }),
+        t('votekick.kicked5', { name: session.targetMember.displayName }),
       ]
 
       const randomMessage = kickMessages[Math.floor(Math.random() * kickMessages.length)]
@@ -202,7 +204,7 @@ export class VoteKickHandler {
       message.channel.send(randomMessage)
     } catch (error) {
       console.error('Error executing votekick:', error)
-      message.channel.send(`Failed to kick **${session.targetMember.displayName}**. I might not have permission! 😤`)
+      message.channel.send(t('votekick.kickFailed', { name: session.targetMember.displayName }))
       activeVoteKicks.delete(guildId)
     }
   }

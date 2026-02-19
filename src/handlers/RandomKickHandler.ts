@@ -1,4 +1,5 @@
 import { Message, GuildMember } from 'discord.js'
+import { t } from '../i18n'
 
 export class RandomKickHandler {
   static async execute(message: Message) {
@@ -27,7 +28,7 @@ export class RandomKickHandler {
     console.log(`[RandomKick] Members in channel (non-bot): ${members.size} — [${members.map((m: GuildMember) => m.user.username).join(', ')}]`)
 
     if (members.size <= 1) {
-      message.reply('There needs to be more than 1 person in the channel for Russian Roulette! 🎰')
+      message.reply(t('randomkick.notEnough'))
       return
     }
 
@@ -39,10 +40,10 @@ export class RandomKickHandler {
     console.log(`[RandomKick] Selected victim: ${victim.user.username} (${victim.id}) — voice channel id: ${victim.voice?.channelId ?? 'none'}`)
 
     const suspenseMessages = [
-      '🔫 Spinning the chamber...',
-      '🎰 The wheel of fate turns...',
-      '💀 Someone is about to get disconnected...',
-      '😈 Eeny, meeny, miny, moe...',
+      t('randomkick.suspense1'),
+      t('randomkick.suspense2'),
+      t('randomkick.suspense3'),
+      t('randomkick.suspense4'),
     ]
 
     const randomSuspenseMessage = suspenseMessages[Math.floor(Math.random() * suspenseMessages.length)]
@@ -53,11 +54,11 @@ export class RandomKickHandler {
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     const farewellMessages = [
-      `💥 BANG! **${victim.displayName}** got shot! Goodbye! 👋`,
-      `🎯 The bullet found **${victim.displayName}**! See ya! 💀`,
-      `💣 BOOM! **${victim.displayName}** has been eliminated! 🪦`,
-      `🔫 *click* ... 💥 **${victim.displayName}** is OUT! Adeus! 🫡`,
-      `☠️ RIP **${victim.displayName}**. You will not be missed. 😂`,
+      t('randomkick.farewell1', { name: victim.displayName }),
+      t('randomkick.farewell2', { name: victim.displayName }),
+      t('randomkick.farewell3', { name: victim.displayName }),
+      t('randomkick.farewell4', { name: victim.displayName }),
+      t('randomkick.farewell5', { name: victim.displayName }),
     ]
 
     const randomFarewell = farewellMessages[Math.floor(Math.random() * farewellMessages.length)]
@@ -66,7 +67,7 @@ export class RandomKickHandler {
       console.log(`[RandomKick] Attempting to disconnect ${victim.user.username}...`)
       if (!victim.voice?.channel) {
         console.log(`[RandomKick] ERROR: victim has no voice channel (already left?)`)
-        message.channel.send(`**${victim.displayName}** escaped before I could shoot! 👻`)
+        message.channel.send(t('randomkick.escaped', { name: victim.displayName }))
         return
       }
       await victim.voice.disconnect('Russian Roulette - randomckick')
@@ -75,7 +76,7 @@ export class RandomKickHandler {
     } catch (error: any) {
       console.error(`[RandomKick] ERROR disconnecting ${victim.user.username}:`, error?.message ?? error)
       console.error(`[RandomKick] Full error:`, error)
-      message.channel.send(`I tried to kick **${victim.displayName}** but I don't have permission! 😤\n\`\`\`${error?.message ?? error}\`\`\``)
+      message.channel.send(t('randomkick.noPermission', { name: victim.displayName }))
     }
   }
 }

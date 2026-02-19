@@ -177,7 +177,14 @@ client.on('messageCreate', async (message: Message) => {
 
     // ===== NEW FEATURES =====
 
-    // Last Match Recap: !match <steam_id>
+    // Last Match Recap: !lastmatch [@user|nick]
+    if (messageContent.startsWith('!lastmatch')) {
+      const args = message.content.substring('!lastmatch'.length).trim()
+      await MatchHandler.lastMatch(message, args)
+      return
+    }
+
+    // Legacy: !match <steam_id>
     if (messageContent.startsWith('!match ')) {
       const steamId = message.content.split(' ').slice(1).join(' ').trim()
       if (steamId) {
@@ -236,7 +243,7 @@ client.on('messageCreate', async (message: Message) => {
 
     // Roast: !roast @user
     if (messageContent.startsWith('!roast')) {
-      RoastHandler.execute(message)
+      await RoastHandler.execute(message)
       return
     }
 
@@ -332,7 +339,7 @@ client.on('messageCreate', async (message: Message) => {
         .setTitle('🤖 Bot Commands')
         .addFields(
           { name: '🎵 Sound', value: '`!play <name>` — Play a sound\n`!sounds` — List sounds (slash)', inline: false },
-          { name: '🎮 Dota 2', value: '`!random <count/players>` — Randomize heroes\n`!match <steam_id>` — Last match recap', inline: false },
+          { name: '🎮 Dota 2', value: '`!random <count/players>` — Randomize heroes\n`!lastmatch [@user|nick]` — Last 10 match analysis\n`!match <steam_id>` — Last match recap (legacy)', inline: false },
           { name: '🔫 Kick', value: '`!randomckick` — Russian roulette (random kick)\n`!votekick <nick>` — Start a votekick\n`!voteyes` — Vote yes on active votekick', inline: false },
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
           { name: '🔥 Fun', value: '`!roast @user` — Roast someone\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
