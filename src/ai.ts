@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 //
 // Model used: gemini-2.0-flash (free tier: 1,500 req/day, 15 RPM)
 
-const MODEL_NAME = 'gemini-2.0-flash'
+const MODEL_NAME = 'gemini-1.5-flash'
 
 function getModel() {
   // Read lazily on every call - dotenv is guaranteed loaded by the time a command runs
