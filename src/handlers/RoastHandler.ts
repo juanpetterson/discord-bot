@@ -213,7 +213,7 @@ export class RoastHandler {
     await message.channel.send(t('roast.fetching', { name: targetName }))
     await (message.channel as any).sendTyping?.()
 
-    const agg = await MatchHandler.fetchAggregate(accountId, 10)
+    const agg = await MatchHandler.fetchAggregate(accountId, 20)
 
     const requesterName = message.member?.displayName ?? message.author.username
     const embed = new EmbedBuilder()

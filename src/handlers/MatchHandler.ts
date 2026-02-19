@@ -5,7 +5,7 @@ import { t, LANG } from '../i18n'
 import { askAI, matchCommentaryPrompt } from '../ai'
 
 const OPENDOTA_API = 'https://api.opendota.com/api'
-const RECENT_MATCH_COUNT = 10
+const RECENT_MATCH_COUNT = 20
 
 //  Interfaces 
 
