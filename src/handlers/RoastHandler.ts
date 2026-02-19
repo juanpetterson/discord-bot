@@ -1,5 +1,5 @@
 import { Message, EmbedBuilder, GuildMember } from 'discord.js'
-import { DISCORD_TO_STEAM } from './BetHandler'
+import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
 import { MatchHandler } from './MatchHandler'
 import { t, LANG } from '../i18n'
 import { askGemini, roastPrompt } from '../ai'
@@ -176,11 +176,12 @@ export class RoastHandler {
       return
     }
 
-    const targetName = mention.displayName || mention.user.username
+    const discordName = mention.displayName || mention.user.username
     const steamId = DISCORD_TO_STEAM[mention.user.username]
 
     //  No Steam ID: generic roast (AI-generated if available, else pool fallback) 
     if (!steamId) {
+      const targetName = discordName
       const genericPrompt = LANG === 'pt-br'
         ? `Voc\u00ea \u00e9 um comediante de roast savage de Dota 2. Escreva 3-4 linhas de piadas sobre um jogador chamado ${targetName} que provavelmente \u00e9 ruim no Dota. Use humor brasileiro, seja espec\u00edfico e criativo. Sem cabe\u00e7alhos, sem markdown, s\u00f3 texto.`
         : `You are a savage Dota 2 roast comedian. Write 3-4 roast lines about a player named ${targetName} who is probably bad at Dota. Be specific and creative. No headers, no markdown, plain text only.`
@@ -201,13 +202,16 @@ export class RoastHandler {
     }
 
     //  Has Steam ID: fetch real stats 
-    await message.channel.send(t('roast.fetching', { name: targetName }))
-    await (message.channel as any).sendTyping?.()
-
     // Convert Steam64  Steam32 if needed
     let accountId = steamId
     if (steamId.length >= 17)
       accountId = (BigInt(steamId) - BigInt('76561197960265728')).toString()
+
+    // Resolve Dota 2 in-game nick first (usually cached)
+    const targetName = await fetchDotaNick(accountId, discordName)
+
+    await message.channel.send(t('roast.fetching', { name: targetName }))
+    await (message.channel as any).sendTyping?.()
 
     const agg = await MatchHandler.fetchAggregate(accountId, 10)
 

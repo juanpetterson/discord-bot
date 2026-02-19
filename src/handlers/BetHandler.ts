@@ -65,7 +65,7 @@ function fetchPlayerProfile(steamId: string): Promise<any> {
 }
 
 /** Returns the Dota 2 persona name for a steam32 account id, using a 6h cache. */
-async function fetchDotaNick(steamId: string | undefined, fallback: string): Promise<string> {
+export async function fetchDotaNick(steamId: string | undefined, fallback: string): Promise<string> {
   if (!steamId) return fallback
 
   const cache = loadDotaNicksCache()

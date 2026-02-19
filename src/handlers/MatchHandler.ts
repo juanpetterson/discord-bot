@@ -1,6 +1,6 @@
 import https from 'https'
 import { Message, EmbedBuilder } from 'discord.js'
-import { DISCORD_TO_STEAM } from './BetHandler'
+import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
 import { t, LANG } from '../i18n'
 import { askGemini, matchCommentaryPrompt } from '../ai'
 
@@ -404,11 +404,19 @@ export class MatchHandler {
       const agg = computeAggregate(matches)
       const m = matches[0]
 
+      // Fetch full match details in parallel to get denies + level (not in recentMatches)
+      const fullMatch = await httpsGet(`${OPENDOTA_API}/matches/${m.match_id}`)
+      const fullPlayer = fullMatch?.players?.find(
+        (p: any) => p.account_id === Number(accountId)
+      )
+      const denies: number = fullPlayer?.denies ?? 0
+      const level: number  = fullPlayer?.level  ?? 0
+
       const isRadiant = m.player_slot < 128
       const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
       const hero = heroName(m.hero_id)
       const kda = m.deaths === 0 ? m.kills + m.assists : (m.kills + m.assists) / m.deaths
-      const playerName = displayName ?? `Steam ${accountId}`
+      const playerName = await fetchDotaNick(accountId, displayName ?? `Steam ${accountId}`)
 
       const fallbackCtx = {
         name: playerName, hero,
@@ -452,11 +460,11 @@ export class MatchHandler {
           { name: t('match.fieldKDA'), value: `**${m.kills}/${m.deaths}/${m.assists}** (${kda.toFixed(1)})`, inline: true },
           { name: t('match.fieldGPMXPM'), value: `${m.gold_per_min} / ${m.xp_per_min}`, inline: true },
           { name: t('match.fieldDuration'), value: formatDuration(m.duration), inline: true },
-          { name: t('match.fieldLastHits'), value: `${m.last_hits ?? 0} / ${m.denies ?? 0}`, inline: true },
+          { name: t('match.fieldLastHits'), value: `${m.last_hits ?? 0} / ${denies}`, inline: true },
           { name: t('match.fieldHeroDmg'), value: (m.hero_damage ?? 0).toLocaleString(), inline: true },
           { name: t('match.fieldTowerDmg'), value: (m.tower_damage ?? 0).toLocaleString(), inline: true },
           { name: t('match.fieldHealing'), value: (m.hero_healing ?? 0).toLocaleString(), inline: true },
-          { name: t('match.fieldLevel'), value: `${m.level ?? '-'}`, inline: true },
+          { name: t('match.fieldLevel'), value: `${level || '-'}`, inline: true },
           { name: t('match.fieldMode'), value: GAME_MODES[m.game_mode] ?? 'Unknown', inline: true },
           { name: t('match.fieldTrend', { count: agg.total }), value: trendLines, inline: false },
         )
