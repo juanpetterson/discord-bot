@@ -442,18 +442,17 @@ export class GroupHandler {
     }
 
     function teamValue(assignments: typeof assignA) {
-      return assignments
-        .map(
-          (a) =>
-            `**${a.role}** — ${a.member.name}\n` +
-            `↳ [${a.hero.localized_name}](https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${a.hero.name}.png)`
-        )
+      return assignments!
+        .map((a) => `**${a.role}** — ${a.member.name}\n↳ **${a.hero.localized_name}**`)
         .join('\n\n')
     }
 
     const embed = new EmbedBuilder()
       .setColor(0x00ff99)
       .setTitle(t('group.btnRandomTeamsHeroes'))
+      .setThumbnail(
+        `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${assignA![0].hero.name}.png`
+      )
       .addFields(
         { name: t('group.teamATitle'), value: teamValue(assignA), inline: true },
         { name: t('group.teamBTitle'), value: teamValue(assignB), inline: true }
