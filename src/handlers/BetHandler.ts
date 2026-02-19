@@ -19,7 +19,7 @@ export const DISCORD_TO_STEAM: Record<string, string> = {
   'eradim': '18354196',
   'dedableo': '1290315073',
   'juanpetterson.': '89756583',
-  'arlovas.': '65463725',
+  'arlovas': '65463725',
   'fermino': '89331213',
   'matheusagnes': '18344803',
   '.jogador.' : '96204401',
