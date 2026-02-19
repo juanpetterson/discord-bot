@@ -5,18 +5,17 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 //
 // Model used: gemini-2.0-flash (free tier: 1,500 req/day, 15 RPM)
 
-const API_KEY = process.env.GEMINI_API_KEY ?? ''
 const MODEL_NAME = 'gemini-2.0-flash'
 
-let _client: ReturnType<typeof GoogleGenerativeAI.prototype.getGenerativeModel> | null = null
-
 function getModel() {
-  if (!API_KEY) return null
-  if (!_client) {
-    const genAI = new GoogleGenerativeAI(API_KEY)
-    _client = genAI.getGenerativeModel({ model: MODEL_NAME })
-  }
-  return _client
+  // Read lazily on every call - dotenv is guaranteed loaded by the time a command runs
+  const apiKey = process.env.GEMINI_API_KEY ?? ''
+  if (!apiKey) return null
+  const genAI = new GoogleGenerativeAI(apiKey)
+  return genAI.getGenerativeModel({
+    model: MODEL_NAME,
+    generationConfig: { temperature: 1.5, topP: 0.95, topK: 40 },
+  })
 }
 
 /**
