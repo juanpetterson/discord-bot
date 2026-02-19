@@ -3,6 +3,15 @@ import { Message, GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Bu
 // Dota 2 roles per slot index (0-4 = team A, 5-9 = team B)
 const ROLES = ['Hard Carry', 'Mid Lane', 'Offlane', 'Soft Support', 'Hard Support']
 
+// Hero roles preferred for each Dota 2 position (in priority order)
+const ROLE_PREFERRED_HERO_ROLES: Record<string, string[]> = {
+  'Hard Carry':   ['Carry'],
+  'Mid Lane':     ['Carry', 'Nuker', 'Escape'],
+  'Offlane':      ['Durable', 'Initiator', 'Disabler'],
+  'Soft Support': ['Support', 'Disabler', 'Initiator'],
+  'Hard Support': ['Support'],
+}
+
 export interface Group {
   size: 2 | 4 | 5
   creatorId: string
@@ -177,6 +186,7 @@ export class GroupHandler {
       group.members.push({ id: interaction.user.id, name: displayName })
       console.log(`[GroupHandler] ${displayName} joined x${group.size} group via button`)
       await interaction.deferUpdate()
+      await GroupHandler._disableButtons(interaction)
       if (group.members.length === totalSlots) {
         await GroupHandler._sendFullGroup(interaction.channel, group)
       } else {
@@ -192,6 +202,7 @@ export class GroupHandler {
         return
       }
       await interaction.deferUpdate()
+      await GroupHandler._disableButtons(interaction)
       await GroupHandler._randomTeams(interaction, group)
       return
     }
@@ -203,6 +214,7 @@ export class GroupHandler {
         return
       }
       await interaction.deferUpdate()
+      await GroupHandler._disableButtons(interaction)
       await GroupHandler._randomTeamsHeroes(interaction, group)
       return
     }
@@ -214,6 +226,7 @@ export class GroupHandler {
         return
       }
       await interaction.deferUpdate()
+      await GroupHandler._disableButtons(interaction)
       await GroupHandler._assignHeroesToTeams(interaction, stored.teamA, stored.teamB)
       return
     }
@@ -225,7 +238,11 @@ export class GroupHandler {
         return
       }
       await interaction.deferUpdate()
+      await GroupHandler._disableButtons(interaction)
       await GroupHandler._splitVoiceChannels(interaction, stored.teamA, stored.teamB)
+      // Clean up — the event has started, group and team data are no longer needed
+      activeGroups.delete(channelId)
+      lastTeams.delete(channelId)
       return
     }
   }
@@ -285,6 +302,20 @@ export class GroupHandler {
     return a
   }
 
+  /** Disables all buttons on the message that triggered this interaction. */
+  private static async _disableButtons(interaction: any) {
+    try {
+      const disabled = interaction.message.components.map((row: any) =>
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          row.components.map((btn: any) =>
+            ButtonBuilder.from(btn.toJSON ? btn.toJSON() : btn).setDisabled(true)
+          )
+        )
+      )
+      await interaction.message.edit({ components: disabled })
+    } catch { /* ignore — message may have been deleted */ }
+  }
+
   private static async _randomTeams(interaction: any, group: Group) {
     const shuffled = GroupHandler._shuffle(group.members)
     const half = group.size  // exactly size players per team
@@ -338,9 +369,15 @@ export class GroupHandler {
     const heroes: any[] = require('../assets/data/heroes.json')
     const usedHeroIds = new Set<number>()
 
-    function pickHero() {
+    function pickHeroForRole(roleName: string) {
+      const preferred = ROLE_PREFERRED_HERO_ROLES[roleName] ?? []
+      // Try to pick a hero whose roles overlap with the preferred list for this position
       const available = heroes.filter((h: any) => !usedHeroIds.has(h.id))
-      const hero = available[Math.floor(Math.random() * available.length)]
+      const matching = available.filter((h: any) =>
+        h.roles.some((r: string) => preferred.includes(r))
+      )
+      const pool = matching.length > 0 ? matching : available
+      const hero = pool[Math.floor(Math.random() * pool.length)]
       usedHeroIds.add(hero.id)
       return hero
     }
@@ -348,8 +385,8 @@ export class GroupHandler {
     const rolesA = [...ROLES].slice(0, teamA.length)
     const rolesB = [...ROLES].slice(0, teamB.length)
 
-    const assignA = teamA.map((m, i) => ({ member: m, role: rolesA[i], hero: pickHero() }))
-    const assignB = teamB.map((m, i) => ({ member: m, role: rolesB[i], hero: pickHero() }))
+    const assignA = teamA.map((m, i) => ({ member: m, role: rolesA[i], hero: pickHeroForRole(rolesA[i]) }))
+    const assignB = teamB.map((m, i) => ({ member: m, role: rolesB[i], hero: pickHeroForRole(rolesB[i]) }))
 
     function teamValue(assignments: typeof assignA) {
       return assignments

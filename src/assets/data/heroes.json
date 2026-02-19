@@ -1114,5 +1114,32 @@
     "attack_type": "Ranged",
     "roles": ["Carry", "Nuker", "Disabler"],
     "legs": 2
+  },
+  {
+    "id": 131,
+    "name": "ringmaster",
+    "localized_name": "Ringmaster",
+    "primary_attr": "int",
+    "attack_type": "Ranged",
+    "roles": ["Support", "Nuker", "Escape", "Disabler"],
+    "legs": 2
+  },
+  {
+    "id": 145,
+    "name": "kez",
+    "localized_name": "Kez",
+    "primary_attr": "agi",
+    "attack_type": "Melee",
+    "roles": ["Carry", "Escape", "Disabler"],
+    "legs": 2
+  },
+  {
+    "id": 155,
+    "name": "lago",
+    "localized_name": "Largo",
+    "primary_attr": "str",
+    "attack_type": "Melee",
+    "roles": ["Durable", "Disabler", "Support"],
+    "legs": 2
   }
 ]
