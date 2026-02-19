@@ -1,5 +1,6 @@
 import { Message, GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from 'discord.js'
 import { t } from '../i18n'
+import { askAI, heroPickPrompt } from '../ai'
 
 // Dota 2 roles per slot index (0-4 = team A, 5-9 = team B)
 const ROLES = ['Hard Carry', 'Mid Lane', 'Offlane', 'Soft Support', 'Hard Support']
@@ -368,26 +369,77 @@ export class GroupHandler {
     teamB: { id: string; name: string }[]
   ) {
     const heroes: any[] = require('../assets/data/heroes.json')
-    const usedHeroIds = new Set<number>()
+    const rolesA = ROLES.slice(0, teamA.length)
+    const rolesB = ROLES.slice(0, teamB.length)
+    const allRoles = rolesA  // same for both teams
+    const size = teamA.length
 
-    function pickHeroForRole(roleName: string) {
-      const preferred = ROLE_PREFERRED_HERO_ROLES[roleName] ?? []
-      // Try to pick a hero whose roles overlap with the preferred list for this position
-      const available = heroes.filter((h: any) => !usedHeroIds.has(h.id))
-      const matching = available.filter((h: any) =>
-        h.roles.some((r: string) => preferred.includes(r))
-      )
-      const pool = matching.length > 0 ? matching : available
-      const hero = pool[Math.floor(Math.random() * pool.length)]
-      usedHeroIds.add(hero.id)
-      return hero
+    // ── Try AI hero assignment ──────────────────────────────────────────
+    let assignA: { member: typeof teamA[0]; role: string; hero: any }[] | null = null
+    let assignB: { member: typeof teamB[0]; role: string; hero: any }[] | null = null
+
+    try {
+      const prompt = heroPickPrompt({ size, roles: allRoles, heroPool: heroes })
+      const raw = await askAI(prompt, 300, 0.4)
+
+      if (raw) {
+        // Extract JSON — strip any markdown fences the model might add
+        const jsonMatch = raw.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]) as { teamA: string[]; teamB: string[] }
+
+          if (
+            Array.isArray(parsed.teamA) && parsed.teamA.length === size &&
+            Array.isArray(parsed.teamB) && parsed.teamB.length === size
+          ) {
+            // Match returned names to hero objects (case-insensitive)
+            const findHero = (name: string) =>
+              heroes.find((h: any) =>
+                h.localized_name.toLowerCase() === name.toLowerCase() ||
+                h.name.toLowerCase() === name.toLowerCase()
+              )
+
+            const heroesA = parsed.teamA.map(findHero)
+            const heroesB = parsed.teamB.map(findHero)
+
+            // Only accept if every name resolved and there are no duplicates
+            const allFound = [...heroesA, ...heroesB].every(Boolean)
+            const ids = [...heroesA, ...heroesB].map((h: any) => h?.id)
+            const noDups = new Set(ids).size === ids.length
+
+            if (allFound && noDups) {
+              assignA = teamA.map((m, i) => ({ member: m, role: rolesA[i], hero: heroesA[i] }))
+              assignB = teamB.map((m, i) => ({ member: m, role: rolesB[i], hero: heroesB[i] }))
+              console.log('[GroupHandler] AI hero assignment succeeded')
+            } else {
+              console.warn('[GroupHandler] AI returned unknown/duplicate heroes, falling back')
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('[GroupHandler] AI hero pick failed, using fallback:', err?.message ?? err)
     }
 
-    const rolesA = [...ROLES].slice(0, teamA.length)
-    const rolesB = [...ROLES].slice(0, teamB.length)
+    // ── Fallback: role-based random pick ───────────────────────────────
+    if (!assignA || !assignB) {
+      const usedHeroIds = new Set<number>()
 
-    const assignA = teamA.map((m, i) => ({ member: m, role: rolesA[i], hero: pickHeroForRole(rolesA[i]) }))
-    const assignB = teamB.map((m, i) => ({ member: m, role: rolesB[i], hero: pickHeroForRole(rolesB[i]) }))
+      const pickHeroForRole = (roleName: string) => {
+        const preferred = ROLE_PREFERRED_HERO_ROLES[roleName] ?? []
+        const available = heroes.filter((h: any) => !usedHeroIds.has(h.id))
+        const matching = available.filter((h: any) =>
+          h.roles.some((r: string) => preferred.includes(r))
+        )
+        const pool = matching.length > 0 ? matching : available
+        const hero = pool[Math.floor(Math.random() * pool.length)]
+        usedHeroIds.add(hero.id)
+        return hero
+      }
+
+      assignA = teamA.map((m, i) => ({ member: m, role: rolesA[i], hero: pickHeroForRole(rolesA[i]) }))
+      assignB = teamB.map((m, i) => ({ member: m, role: rolesB[i], hero: pickHeroForRole(rolesB[i]) }))
+    }
 
     function teamValue(assignments: typeof assignA) {
       return assignments

@@ -21,7 +21,7 @@ function getClient() {
  * Returns null if GROQ_API_KEY is not set or the request fails,
  * so callers fall back to hardcoded responses.
  */
-export async function askAI(prompt: string, maxTokens = 300): Promise<string | null> {
+export async function askAI(prompt: string, maxTokens = 300, temperature = 1.2): Promise<string | null> {
   const client = getClient()
   if (!client) {
     console.warn('[AI] GROQ_API_KEY not set - using fallback commentary.')
@@ -30,7 +30,7 @@ export async function askAI(prompt: string, maxTokens = 300): Promise<string | n
   try {
     const chat = await client.chat.completions.create({
       model: MODEL_NAME,
-      temperature: 1.2,
+      temperature,
       top_p: 0.95,
       max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }],
@@ -43,6 +43,57 @@ export async function askAI(prompt: string, maxTokens = 300): Promise<string | n
 }
 
 // \u2500\u2500\u2500 Prompt builders \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+/**
+ * Prompt for AI-powered hero draft assignment.
+ * Asks the model to pick one hero per role per team with no duplicates.
+ * Expects a JSON response: { "teamA": ["Hero1",...], "teamB": ["Hero1",...] }
+ */
+export function heroPickPrompt(opts: {
+  size: number
+  roles: string[]
+  heroPool: { localized_name: string; roles: string[] }[]
+}): string {
+  const { size, roles, heroPool } = opts
+
+  // Group available heroes compactly by their most relevant Dota role
+  const byRole: Record<string, string[]> = {
+    Carry: [], Mid: [], Offlane: [], 'Soft Support': [], 'Hard Support': [],
+  }
+  for (const h of heroPool) {
+    const r = h.roles
+    if (r.includes('Carry') && !r.includes('Support'))         byRole['Carry'].push(h.localized_name)
+    else if (r.includes('Nuker') && !r.includes('Support'))   byRole['Mid'].push(h.localized_name)
+    else if (r.includes('Initiator') && !r.includes('Support')) byRole['Offlane'].push(h.localized_name)
+    else if (r.includes('Support') && r.includes('Disabler')) byRole['Soft Support'].push(h.localized_name)
+    else if (r.includes('Support'))                            byRole['Hard Support'].push(h.localized_name)
+    else                                                       byRole['Carry'].push(h.localized_name)
+  }
+
+  const poolLines = Object.entries(byRole)
+    .filter(([, heroes]) => heroes.length > 0)
+    .map(([role, heroes]) => `${role}: ${heroes.join(', ')}`)
+    .join('\n')
+
+  const roleList = roles.map((r, i) => `${i + 1}. ${r}`).join('\n')
+
+  return `You are a Dota 2 expert drafter. Assign heroes for a ${size}v${size} match.
+
+Each team needs exactly ${roles.length} heroes, one per role in this order:
+${roleList}
+
+Available hero pool (grouped by primary function):
+${poolLines}
+
+Rules:
+- Pick heroes genuinely suitable for each role (e.g. Anti-Mage for Hard Carry, Crystal Maiden for Hard Support)
+- No hero may appear more than once across both teams
+- Only use hero names exactly as written in the pool above
+- Vary the picks — do not always pick the most popular heroes
+
+Respond with ONLY valid JSON, no explanation, no markdown:
+{"teamA":["Hero1","Hero2"...],"teamB":["Hero1","Hero2"...]}`
+}
 
 /** Prompt for match commentary (2-3 sentences, witty) */
 export function matchCommentaryPrompt(opts: {
