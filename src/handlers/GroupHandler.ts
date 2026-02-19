@@ -441,22 +441,35 @@ export class GroupHandler {
       assignB = teamB.map((m, i) => ({ member: m, role: rolesB[i], hero: pickHeroForRole(rolesB[i]) }))
     }
 
-    function teamValue(assignments: typeof assignA) {
-      return assignments!
-        .map((a) => `**${a.role}** — ${a.member.name}\n↳ **${a.hero.localized_name}**`)
-        .join('\n\n')
-    }
+    const heroImg = (name: string) =>
+      `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${name}.png`
 
-    const embed = new EmbedBuilder()
-      .setColor(0x00ff99)
-      .setTitle(t('group.btnRandomTeamsHeroes'))
-      .setThumbnail(
-        `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${assignA![0].hero.name}.png`
-      )
-      .addFields(
-        { name: t('group.teamATitle'), value: teamValue(assignA), inline: true },
-        { name: t('group.teamBTitle'), value: teamValue(assignB), inline: true }
-      )
+    const embeds: EmbedBuilder[] = []
+
+    // Team A embeds (blue)
+    assignA!.forEach((a, i) => {
+      const e = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setThumbnail(heroImg(a.hero.name))
+        .setDescription(`**${a.role}** — ${a.member.name}\n↳ **${a.hero.localized_name}**`)
+      if (i === 0) {
+        e.setTitle(t('group.btnRandomTeamsHeroes'))
+        e.setAuthor({ name: `🔵 ${t('group.teamATitle')}` })
+      }
+      embeds.push(e)
+    })
+
+    // Team B embeds (red)
+    assignB!.forEach((a, i) => {
+      const e = new EmbedBuilder()
+        .setColor(0xed4245)
+        .setThumbnail(heroImg(a.hero.name))
+        .setDescription(`**${a.role}** — ${a.member.name}\n↳ **${a.hero.localized_name}**`)
+      if (i === 0) {
+        e.setAuthor({ name: `🔴 ${t('group.teamBTitle')}` })
+      }
+      embeds.push(e)
+    })
 
     const moveRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -465,7 +478,7 @@ export class GroupHandler {
         .setStyle(ButtonStyle.Secondary)
     )
 
-    await interaction.channel.send({ embeds: [embed], components: [moveRow] })
+    await interaction.channel.send({ embeds, components: [moveRow] })
   }
 
   // ─── Voice channel splitter ───────────────────────────────────────────────
