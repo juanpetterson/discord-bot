@@ -45,6 +45,36 @@ interface AggregateStats {
   totalFeedGames: number         // games with 10+ deaths
 }
 
+export interface LastMatchFull {
+  matchId: number
+  hero: string
+  kills: number
+  deaths: number
+  assists: number
+  kda: number
+  gpm: number
+  xpm: number
+  heroDamage: number
+  towerDamage: number
+  heroHealing: number
+  lastHits: number
+  denies: number
+  netWorth: number
+  level: number
+  duration: number
+  won: boolean
+  isTurbo: boolean
+  gameMode: string
+  laneRole: string
+  laneRoleId: number
+  items: string[]
+  obsPlaced: number
+  senPlaced: number
+  campsStacked: number
+  startTime: number
+  agg: AggregateStats
+}
+
 //  Game mode labels 
 
 const GAME_MODES: Record<number, string> = {
@@ -56,6 +86,38 @@ const GAME_MODES: Record<number, string> = {
 //  Hero map cache 
 
 const heroMap: Record<number, string> = {}
+
+//  Item map cache 
+
+const itemMap: Record<number, string> = {}
+
+async function loadItemMap() {
+  if (Object.keys(itemMap).length > 0) return
+  const items = await httpsGet(`${OPENDOTA_API}/constants/items`)
+  if (items && typeof items === 'object') {
+    for (const val of Object.values(items)) {
+      const v = val as any
+      if (v.id && v.dname) itemMap[v.id] = v.dname
+    }
+  }
+}
+
+function itemName(id: number): string {
+  if (!id || id === 0) return ''
+  return itemMap[id] || `Item #${id}`
+}
+
+const LANE_ROLES: Record<number, string> = {
+  1: 'Safe Lane (Position 1/2)',
+  2: 'Mid Lane (Position 2)',
+  3: 'Off Lane (Position 3)',
+  4: 'Soft Support (Position 4)',
+  5: 'Hard Support (Position 5)',
+}
+
+function laneRoleName(role: number): string {
+  return LANE_ROLES[role] || 'Unknown Position'
+}
 
 function httpsGet(url: string): Promise<any> {
   return new Promise((resolve) => {
@@ -396,7 +458,13 @@ export class MatchHandler {
         `${OPENDOTA_API}/players/${accountId}/recentMatches`
       )
       if (!recent || recent.length === 0) {
-        message.reply(t('match.noRecent'))
+        // Check if the player has match data exposure disabled
+        const profile = await httpsGet(`${OPENDOTA_API}/players/${accountId}`)
+        if (profile?.profile?.account_id && profile?.profile?.fh_unavailable === true) {
+          message.reply(t('match.noDataExposed', { name: displayName ?? `Steam ${accountId}` }))
+        } else {
+          message.reply(t('match.noRecent'))
+        }
         return
       }
 
@@ -492,6 +560,78 @@ export class MatchHandler {
       )
       if (!recent || recent.length === 0) return null
       return computeAggregate(recent.slice(0, count))
+    } catch {
+      return null
+    }
+  }
+
+  /** Exported for RoastHandler: returns full last match data (items, position, etc.) */
+  static async fetchLastMatchFull(accountId: string): Promise<LastMatchFull | null> {
+    try {
+      await loadHeroMap()
+      await loadItemMap()
+
+      const recent: RecentMatch[] = await httpsGet(
+        `${OPENDOTA_API}/players/${accountId}/recentMatches`
+      )
+      if (!recent || recent.length === 0) return null
+
+      const matches = recent.slice(0, RECENT_MATCH_COUNT)
+      const agg = computeAggregate(matches)
+      const m = matches[0]
+
+      // Fetch full match details for items, lane role, net worth, etc.
+      const fullMatch = await httpsGet(`${OPENDOTA_API}/matches/${m.match_id}`)
+      const fullPlayer = fullMatch?.players?.find(
+        (p: any) => p.account_id === Number(accountId)
+      )
+
+      const isRadiant = m.player_slot < 128
+      const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
+      const hero = heroName(m.hero_id)
+      const kda = m.deaths === 0
+        ? m.kills + m.assists
+        : (m.kills + m.assists) / m.deaths
+
+      // Collect items (slots 0-5)
+      const rawItems: string[] = []
+      if (fullPlayer) {
+        for (let i = 0; i <= 5; i++) {
+          const id = fullPlayer[`item_${i}`] as number
+          const name = itemName(id)
+          if (name) rawItems.push(name)
+        }
+      }
+
+      return {
+        matchId: m.match_id,
+        hero,
+        kills: m.kills,
+        deaths: m.deaths,
+        assists: m.assists,
+        kda: Math.round(kda * 10) / 10,
+        gpm: m.gold_per_min,
+        xpm: m.xp_per_min,
+        heroDamage: m.hero_damage ?? 0,
+        towerDamage: m.tower_damage ?? 0,
+        heroHealing: m.hero_healing ?? 0,
+        lastHits: fullPlayer?.last_hits ?? m.last_hits ?? 0,
+        denies: fullPlayer?.denies ?? 0,
+        netWorth: fullPlayer?.net_worth ?? 0,
+        level: fullPlayer?.level ?? 0,
+        duration: m.duration,
+        won,
+        isTurbo: m.game_mode === 23,
+        gameMode: GAME_MODES[m.game_mode] ?? 'Unknown',
+        laneRole: laneRoleName(fullPlayer?.lane_role ?? 0),
+        laneRoleId: fullPlayer?.lane_role ?? 0,
+        items: rawItems,
+        obsPlaced: fullPlayer?.obs_placed ?? 0,
+        senPlaced: fullPlayer?.sen_placed ?? 0,
+        campsStacked: fullPlayer?.camps_stacked ?? 0,
+        startTime: m.start_time,
+        agg,
+      }
     } catch {
       return null
     }

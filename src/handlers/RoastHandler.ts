@@ -1,8 +1,8 @@
 import { Message, EmbedBuilder, GuildMember } from 'discord.js'
 import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
-import { MatchHandler } from './MatchHandler'
+import { MatchHandler, LastMatchFull } from './MatchHandler'
 import { t, LANG } from '../i18n'
-import { askAI, roastPrompt } from '../ai'
+import { askAI, roastPrompt, roastLastMatchPrompt } from '../ai'
 
 //  Generic roast pools (fallback when no Steam data) 
 
@@ -160,6 +160,90 @@ function dataRoastEnUs(
   return lines.join('\n')
 }
 
+//  Hardcoded roast-last-match fallbacks (used when AI is unavailable) 
+
+function roastLastFallbackPtBr(name: string, d: LastMatchFull): string {
+  const mins = Math.floor(d.duration / 60)
+  const winRate = Math.round((d.agg.wins / d.agg.total) * 100)
+  const itemList = d.items.length ? d.items.join(', ') : 'nada de relevante'
+  const lines: string[] = []
+
+  // Turbo
+  if (d.isTurbo)
+    lines.push(`${name} jogou Turbo. N\u00e3o \'e miss\u00e3o, \'e terceiriza\u00e7\u00e3o da vergonha.`)
+
+  // Result vs performance
+  if (!d.won && d.deaths >= 10)
+    lines.push(`${d.kills}/${d.deaths}/${d.assists} de ${d.hero} e PERDEU. ${name} n\u00e3o jogou, fez entrega exprr\u00e9ss de ouro.`)
+  else if (!d.won && d.kda < 1)
+    lines.push(`${d.kills}/${d.deaths}/${d.assists} de ${d.hero} com KDA ${d.kda.toFixed(1)} e ainda perdeu. Matem\u00e1tica impiedosa.`)
+  else if (d.won && d.deaths >= 10)
+    lines.push(`Ganhou com ${d.deaths} mortes. O time de ${name} salvou a partida enquanto ${name} testava o respawn.`)
+  else if (d.won && d.kda >= 8)
+    lines.push(`${d.kills}/${d.deaths}/${d.assists} de ${d.hero}. Ok, ${name} absurdamente dominou. Isso s\u00f3 acontece em mirror match de KDA.`)
+
+  // Support wards
+  if ((d.laneRoleId === 4 || d.laneRoleId === 5) && d.obsPlaced === 0)
+    lines.push(`${name} jogou suporte de ${d.hero} e comprou 0 wards. Isso n\u00e3o \u00e9 suporte, \u00e9 carry com menos farm.`)
+
+  // Items
+  if (d.items.length > 0)
+    lines.push(`Build final: ${itemList}. ${name} foi ao sh\u00f3p de olhos fechados e pediu o pac\u00f3te surpresa.`)
+
+  // GPM for carry
+  if ((d.laneRoleId === 1 || d.laneRoleId === 2) && d.gpm < 350)
+    lines.push(`${d.gpm} GPM de carry. At\u00e9 suporte de trilha comprida manda mais gold do que isso.`)
+
+  // Low damage
+  if (d.heroDamage < 8000 && d.duration > 1200)
+    lines.push(`${d.heroDamage.toLocaleString()} de dano em ${mins} minutos. ${name} estava assistindo ou jogando?`)
+
+  if (lines.length === 0)
+    lines.push(`${name} foi ${d.kills}/${d.deaths}/${d.assists} de ${d.hero}. ${d.won ? 'Ganhou mediocrement\u00e9, parab\u00e9ns.' : 'Perdeu com consist\u00eancia, pelo menos.'}`)
+  else if (lines.length === 1)
+    lines.push(`Hist\u00f3rico recente: ${winRate}% de winrate. Contextualiza bastante o above.`)
+
+  return lines.join('\n')
+}
+
+function roastLastFallbackEnUs(name: string, d: LastMatchFull): string {
+  const mins = Math.floor(d.duration / 60)
+  const winRate = Math.round((d.agg.wins / d.agg.total) * 100)
+  const itemList = d.items.length ? d.items.join(', ') : 'nothing notable'
+  const lines: string[] = []
+
+  if (d.isTurbo)
+    lines.push(`${name} played Turbo. Not a game mode\u2014a coping mechanism.`)
+
+  if (!d.won && d.deaths >= 10)
+    lines.push(`${d.kills}/${d.deaths}/${d.assists} on ${d.hero} and lost. ${name} didn't play\u2014they were the enemy team's personal ATM.`)
+  else if (!d.won && d.kda < 1)
+    lines.push(`${d.kills}/${d.deaths}/${d.assists} on ${d.hero} with a ${d.kda.toFixed(1)} KDA and still lost. The stats don't lie.`)
+  else if (d.won && d.deaths >= 10)
+    lines.push(`Won despite ${d.deaths} deaths. ${name}'s team carried the bag and then some.`)
+  else if (d.won && d.kda >= 8)
+    lines.push(`${d.kills}/${d.deaths}/${d.assists} on ${d.hero}. Fine, ${name} went absolutely nuclear this game. Suspicious.`)
+
+  if ((d.laneRoleId === 4 || d.laneRoleId === 5) && d.obsPlaced === 0)
+    lines.push(`${name} played support ${d.hero} and placed 0 observer wards. That's not support\u2014that's a carry with no farm.`)
+
+  if (d.items.length > 0)
+    lines.push(`Final build: ${itemList}. ${name} clearly shopped with their eyes closed.`)
+
+  if ((d.laneRoleId === 1 || d.laneRoleId === 2) && d.gpm < 350)
+    lines.push(`${d.gpm} GPM as a core. Even a support with no farm does better economically.`)
+
+  if (d.heroDamage < 8000 && d.duration > 1200)
+    lines.push(`${d.heroDamage.toLocaleString()} hero damage in ${mins} minutes. ${name}, were you playing or just spectating yourself?`)
+
+  if (lines.length === 0)
+    lines.push(`${name} went ${d.kills}/${d.deaths}/${d.assists} on ${d.hero}. ${d.won ? 'Won mediocrely. Congrats I guess.' : 'Lost consistently at least.'}`)
+  else if (lines.length === 1)
+    lines.push(`Recent history: ${winRate}% winrate. That contextualises everything above perfectly.`)
+
+  return lines.join('\n')
+}
+
 //  Handler 
 
 export class RoastHandler {
@@ -269,6 +353,155 @@ export class RoastHandler {
           { name: ' KDA m\ufffddio', value: `${agg.avgKDA}`, inline: true },
         )
     }
+
+    await message.channel.send({ embeds: [embed] })
+  }
+
+  /** !roastlast [@user|nick] — deep roast of the last match */
+  static async roastLastMatch(message: Message, args: string) {
+    // Resolve target — mention, nick, or self
+    const mentioned = message.mentions.members?.first()
+    let steamId: string | undefined
+    let displayName: string
+
+    if (mentioned) {
+      if (mentioned.user.bot) {
+        message.reply(t('common.botCannotRoast'))
+        return
+      }
+      steamId = DISCORD_TO_STEAM[mentioned.user.username]
+      displayName = mentioned.displayName
+    } else if (args.trim()) {
+      const lower = args.trim().toLowerCase()
+      const key = Object.keys(DISCORD_TO_STEAM).find(k => k.toLowerCase().includes(lower))
+      if (key) {
+        steamId = DISCORD_TO_STEAM[key]
+        displayName = key
+      } else {
+        const available = Object.keys(DISCORD_TO_STEAM).join(', ')
+        message.reply(t('roastlast.notFound', { nicks: available }))
+        return
+      }
+    } else {
+      // Roast the caller themselves
+      steamId = DISCORD_TO_STEAM[message.author.username]
+      displayName = message.member?.displayName ?? message.author.username
+    }
+
+    if (!steamId) {
+      message.reply(t('roastlast.noSteam', { name: displayName! }))
+      return
+    }
+
+    // Convert Steam64 → Steam32 if needed
+    let accountId = steamId
+    if (steamId.length >= 17)
+      accountId = (BigInt(steamId) - BigInt('76561197960265728')).toString()
+
+    const targetName = await fetchDotaNick(accountId, displayName!)
+
+    await message.channel.send(t('roastlast.fetching', { name: targetName }))
+    await (message.channel as any).sendTyping?.()
+
+    const data = await MatchHandler.fetchLastMatchFull(accountId)
+
+    const requesterName = message.member?.displayName ?? message.author.username
+
+    if (!data) {
+      message.reply(t('roastlast.noData', { name: targetName }))
+      return
+    }
+
+    const winRate = Math.round((data.agg.wins / data.agg.total) * 100)
+    const mins = Math.floor(data.duration / 60)
+    const secs = data.duration % 60
+
+    const aiPrompt = roastLastMatchPrompt({
+      lang: LANG,
+      name: targetName,
+      hero: data.hero,
+      kills: data.kills,
+      deaths: data.deaths,
+      assists: data.assists,
+      kda: data.kda,
+      gpm: data.gpm,
+      xpm: data.xpm,
+      heroDamage: data.heroDamage,
+      towerDamage: data.towerDamage,
+      lastHits: data.lastHits,
+      denies: data.denies,
+      netWorth: data.netWorth,
+      level: data.level,
+      duration: data.duration,
+      won: data.won,
+      isTurbo: data.isTurbo,
+      gameMode: data.gameMode,
+      laneRole: data.laneRole,
+      items: data.items,
+      obsPlaced: data.obsPlaced,
+      senPlaced: data.senPlaced,
+      campsStacked: data.campsStacked,
+      avgDeaths: data.agg.avgDeaths,
+      avgKDA: data.agg.avgKDA,
+      winRate,
+      streak: data.agg.currentStreak,
+      total: data.agg.total,
+    })
+
+    const fallback = LANG === 'pt-br'
+      ? roastLastFallbackPtBr(targetName, data)
+      : roastLastFallbackEnUs(targetName, data)
+
+    const roastText = (await askAI(aiPrompt, 500)) ?? fallback
+
+    const itemDisplay = data.items.length
+      ? data.items.join(', ')
+      : t('roastlast.noItems')
+
+    const streakLabel = data.agg.currentStreak > 0
+      ? `${data.agg.currentStreak}x ${t('match.streakWins')}`
+      : `${Math.abs(data.agg.currentStreak)}x ${t('match.streakLosses')}`
+
+    const embed = new EmbedBuilder()
+      .setColor(data.won ? 0xff6a00 : 0xff1a1a)
+      .setTitle(t('roastlast.title', { hero: data.hero, result: data.won ? t('match.victory') : t('match.defeat') }))
+      .setDescription(`*${roastText}*`)
+      .addFields(
+        { name: t('match.fieldKDA'), value: `**${data.kills}/${data.deaths}/${data.assists}** (${data.kda.toFixed(1)})`, inline: true },
+        { name: t('match.fieldGPMXPM'), value: `${data.gpm} / ${data.xpm}`, inline: true },
+        { name: t('match.fieldMode'), value: `${data.gameMode}`, inline: true },
+        { name: t('roastlast.fieldPosition'), value: data.laneRole, inline: true },
+        { name: t('match.fieldLastHits'), value: `${data.lastHits} / ${data.denies}`, inline: true },
+        { name: t('match.fieldDuration'), value: `${mins}m ${secs.toString().padStart(2, '0')}s`, inline: true },
+        { name: t('match.fieldHeroDmg'), value: data.heroDamage.toLocaleString(), inline: true },
+        { name: t('match.fieldTowerDmg'), value: data.towerDamage.toLocaleString(), inline: true },
+        { name: t('roastlast.fieldNetWorth'), value: data.netWorth.toLocaleString(), inline: true },
+        { name: t('roastlast.fieldItems'), value: itemDisplay, inline: false },
+        {
+          name: t('roastlast.fieldWards'),
+          value: `👁 ${data.obsPlaced} obs  |  🔴 ${data.senPlaced} sen  |  🏕 ${data.campsStacked} stacks`,
+          inline: false,
+        },
+        {
+          name: t('match.fieldTrend', { count: data.agg.total }),
+          value: [
+            t('match.trendWinRate', { wins: data.agg.wins, total: data.agg.total, pct: winRate }),
+            t('match.trendAvgKDA', { kda: data.agg.avgKDA }),
+            t('match.trendAvgDeaths', { avg: data.agg.avgDeaths }),
+            t('match.trendFavHero', { hero: data.agg.favouriteHero, count: data.agg.favouriteHeroCount }),
+            streakLabel,
+          ].join('\n'),
+          inline: false,
+        },
+      )
+      .setFooter({
+        text: t('roastlast.footer', {
+          name: targetName,
+          date: new Date(data.startTime * 1000).toLocaleDateString(),
+          id: data.matchId,
+          requester: requesterName,
+        }),
+      })
 
     await message.channel.send({ embeds: [embed] })
   }

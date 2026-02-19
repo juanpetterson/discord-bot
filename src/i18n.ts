@@ -15,7 +15,8 @@ const translations = {
 
     // \u2500\u2500 Match \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'match.notFound': 'Jogador n\u00e3o encontrado. Use `!lastmatch @user` ou `!lastmatch <nick>`.\nNicks cadastrados: {nicks}',
-    'match.noRecent': 'Nenhuma partida recente encontrada. O perfil precisa ser p\u00fablico no Steam!',
+    'match.noRecent': 'Nenhuma partida recente encontrada. Verifique se o perfil Steam est\u00e1 p\u00fablico e se **Expor dados de partida p\u00fablicos** est\u00e1 ativado nas configura\u00e7\u00f5es do Dota 2.',
+    'match.noDataExposed': '\u26a0\ufe0f **{name}** n\u00e3o tem dados de partida dispon\u00edveis no OpenDota.\nPara corrigir: no Dota 2, v\u00e1 em **Configura\u00e7\u00f5es \u2192 Conta** e ative **Expor dados de partida p\u00fablicos**.\nDepois aguarde alguns minutos e tente novamente.',
     'match.error': 'Erro ao buscar dados da partida. Tente novamente em alguns instantes.',
     'match.victory': '\ud83c\udfc6 VIT\u00d3RIA',
     'match.defeat': '\ud83d\udc80 DERROTA',
@@ -45,6 +46,19 @@ const translations = {
     'roast.fetching': '\ud83d\udd0d Analisando o hist\u00f3rico de derrotas de **{name}**...',
     'roast.title': '\ud83d\udd25 ROAST',
     'roast.footer': 'Solicitado por {requester} | Este roast \u00e9 baseado em dados reais \ud83d\udc80',
+
+    // \u2500\u2500 Roast Last Match \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    'roastlast.notFound': 'Jogador n\u00e3o encontrado. Nicks cadastrados: {nicks}',
+    'roastlast.noSteam': '\u274c {name} n\u00e3o tem Steam ID cadastrado. Cadastre no BetHandler primeiro.',
+    'roastlast.fetching': '\ud83d\udd0d Analisando a \u00faltima partida de **{name}** com olhos de expert...',
+    'roastlast.noData': '\u274c N\u00e3o consegui buscar dados de **{name}**. Verifique se o perfil Steam \u00e9 p\u00fablico.',
+    'roastlast.title': '\ud83d\udd25 ROAST DA \u00daLTIMA PARTIDA \u2014 {hero} | {result}',
+    'roastlast.fieldPosition': '\ud83d\udccc Posi\u00e7\u00e3o',
+    'roastlast.fieldNetWorth': '\ud83d\udcb8 Net Worth',
+    'roastlast.fieldItems': '\ud83d\udee1\ufe0f Build Final',
+    'roastlast.fieldWards': '\ud83d\udc41\ufe0f Wards / Stacks',
+    'roastlast.noItems': 'Nenhum item registrado',
+    'roastlast.footer': '{name} \u2022 {date} \u2022 Match {id} \u2022 Pedido por {requester}',
 
     // \u2500\u2500 Group \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'group.alreadyExists': '\u274c J\u00e1 existe um grupo neste canal! Use `!x{size}leave` pra sair ou `!x{size}cancel` pra cancelar.',
@@ -179,7 +193,8 @@ const translations = {
 
     // \u2500\u2500 Match \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'match.notFound': 'Player not found. Use `!lastmatch @user` or `!lastmatch <nick>`.\nRegistered nicks: {nicks}',
-    'match.noRecent': 'No recent matches found. Make sure the Steam profile is public!',
+    'match.noRecent': 'No recent matches found. Make sure the Steam profile is public and **Expose Public Match Data** is enabled in Dota 2 settings.',
+    'match.noDataExposed': '\u26a0\ufe0f **{name}** has no match data available on OpenDota.\nTo fix this: in Dota 2, go to **Settings \u2192 Account** and enable **Expose Public Match Data**.\nThen wait a few minutes and try again.',
     'match.error': 'Error fetching match data. Please try again later.',
     'match.victory': '\ud83c\udfc6 VICTORY',
     'match.defeat': '\ud83d\udc80 DEFEAT',
@@ -209,6 +224,19 @@ const translations = {
     'roast.fetching': '\ud83d\udd0d Analysing the defeat history of **{name}**...',
     'roast.title': '\ud83d\udd25 ROAST',
     'roast.footer': 'Requested by {requester} | This roast is data-driven \ud83d\udc80',
+
+    // \u2500\u2500 Roast Last Match \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    'roastlast.notFound': 'Player not found. Registered nicks: {nicks}',
+    'roastlast.noSteam': '\u274c {name} has no Steam ID registered. Add it to BetHandler first.',
+    'roastlast.fetching': '\ud83d\udd0d Analysing **{name}**\'s last match with expert eyes...',
+    'roastlast.noData': '\u274c Could not fetch data for **{name}**. Make sure the Steam profile is public.',
+    'roastlast.title': '\ud83d\udd25 LAST MATCH ROAST \u2014 {hero} | {result}',
+    'roastlast.fieldPosition': '\ud83d\udccc Position',
+    'roastlast.fieldNetWorth': '\ud83d\udcb8 Net Worth',
+    'roastlast.fieldItems': '\ud83d\udee1\ufe0f Final Build',
+    'roastlast.fieldWards': '\ud83d\udc41\ufe0f Wards / Stacks',
+    'roastlast.noItems': 'No items recorded',
+    'roastlast.footer': '{name} \u2022 {date} \u2022 Match {id} \u2022 Requested by {requester}',
 
     // \u2500\u2500 Group \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'group.alreadyExists': '\u274c A group already exists in this channel! Use `!x{size}leave` to leave or `!x{size}cancel` to cancel.',

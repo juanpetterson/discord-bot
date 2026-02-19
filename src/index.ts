@@ -241,6 +241,13 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
+    // Roast Last Match: !roastlast [@user|nick]
+    if (messageContent.startsWith('!roastlast')) {
+      const args = message.content.substring('!roastlast'.length).trim()
+      await RoastHandler.roastLastMatch(message, args)
+      return
+    }
+
     // Roast: !roast @user
     if (messageContent.startsWith('!roast')) {
       await RoastHandler.execute(message)
@@ -342,7 +349,7 @@ client.on('messageCreate', async (message: Message) => {
           { name: '🎮 Dota 2', value: '`!random <count/players>` — Randomize heroes\n`!lastmatch [@user|nick]` — Last 10 match analysis\n`!match <steam_id>` — Last match recap (legacy)', inline: false },
           { name: '🔫 Kick', value: '`!randomckick` — Russian roulette (random kick)\n`!votekick <nick>` — Start a votekick\n`!voteyes` — Vote yes on active votekick', inline: false },
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
-          { name: '🔥 Fun', value: '`!roast @user` — Roast someone\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
+          { name: '🔥 Fun', value: '`!roast @user` — Roast someone (career stats)\n`!roastlast [@user|nick]` — Deep roast of last match (items, build, position)\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
           { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet @player` — Cancel your bet on that player\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
           { name: '🎮 x2/x4/x5', value: '`!x2` / `!x4` / `!x5` — Start or join a group manually\n`!autox2` / `!autox4` / `!autox5 [@skip1 @skip2]` — Auto-fill from voice channel (exclude @mentions)\n`!x2leave` / `!x4leave` / `!x5leave` — Leave group\n`!x2cancel` / `!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x2kick <nick>` / `!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)\n> Buttons: **🔀 Move to Channels** splits voice after teams are decided | **⚔️ Assign Heroes** assigns Dota 2 heroes', inline: false },
           { name: '🗣️ TTS', value: '`$text` — Google TTS\n`%text` — AI TTS\n`&text` — AWS TTS\n`!langs` — Supported languages', inline: false },
