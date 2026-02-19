@@ -3,3 +3,4 @@
 .vercel
 dist
 /src/assets/uploads
+/src/assets/data
