@@ -7,5 +7,6 @@ export default defineConfig({
   target: 'es2020',
   loader: {
     '.mpeg': 'file',
+    '.json': 'json',
   },
 });
