@@ -1,40 +1,43 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import OpenAI from 'openai'
 
-// \u2500\u2500\u2500 Gemini setup \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-// Set GEMINI_API_KEY in your .env \u2014 get a free key at https://ai.google.dev
+// \u2500\u2500\u2500 Groq setup \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Set GROQ_API_KEY in your .env - get a free key at https://console.groq.com
 //
-// Model used: gemini-2.0-flash (free tier: 1,500 req/day, 15 RPM)
+// Model: llama-3.3-70b-versatile (free tier: ~14,400 req/day, 30 RPM)
 
-const MODEL_NAME = 'gemini-1.5-flash'
+const MODEL_NAME = 'llama-3.3-70b-versatile'
 
-function getModel() {
-  // Read lazily on every call - dotenv is guaranteed loaded by the time a command runs
-  const apiKey = process.env.GEMINI_API_KEY ?? ''
+function getClient() {
+  const apiKey = process.env.GROQ_API_KEY ?? ''
   if (!apiKey) return null
-  const genAI = new GoogleGenerativeAI(apiKey)
-  return genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    generationConfig: { temperature: 1.5, topP: 0.95, topK: 40 },
+  return new OpenAI({
+    apiKey,
+    baseURL: 'https://api.groq.com/openai/v1',
   })
 }
 
 /**
- * Ask Gemini to generate text for the given prompt.
- * Returns null if GEMINI_API_KEY is not set or if the request fails,
- * so callers can fall back to hardcoded responses.
+ * Ask Groq (Llama 3.3 70B) to generate text for the given prompt.
+ * Returns null if GROQ_API_KEY is not set or the request fails,
+ * so callers fall back to hardcoded responses.
  */
-export async function askGemini(prompt: string): Promise<string | null> {
-  const model = getModel()
-  if (!model) {
-    console.warn('[AI] GEMINI_API_KEY not set \u2014 using fallback commentary.')
+export async function askAI(prompt: string): Promise<string | null> {
+  const client = getClient()
+  if (!client) {
+    console.warn('[AI] GROQ_API_KEY not set - using fallback commentary.')
     return null
   }
   try {
-    const result = await model.generateContent(prompt)
-    const text = result.response.text().trim()
-    return text || null
+    const chat = await client.chat.completions.create({
+      model: MODEL_NAME,
+      temperature: 1.2,
+      top_p: 0.95,
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    return chat.choices[0]?.message?.content?.trim() || null
   } catch (err: any) {
-    console.error('[AI] Gemini request failed:', err?.message ?? err)
+    console.error('[AI] Groq request failed:', err?.message ?? err)
     return null
   }
 }

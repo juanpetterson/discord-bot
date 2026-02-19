@@ -2,7 +2,7 @@ import https from 'https'
 import { Message, EmbedBuilder } from 'discord.js'
 import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
 import { t, LANG } from '../i18n'
-import { askGemini, matchCommentaryPrompt } from '../ai'
+import { askAI, matchCommentaryPrompt } from '../ai'
 
 const OPENDOTA_API = 'https://api.opendota.com/api'
 const RECENT_MATCH_COUNT = 10
@@ -438,7 +438,7 @@ export class MatchHandler {
         streak: agg.currentStreak,
         total: agg.total,
       })
-      const commentary = (await askGemini(aiCommentaryPrompt)) ?? getCommentary(fallbackCtx)
+      const commentary = (await askAI(aiCommentaryPrompt)) ?? getCommentary(fallbackCtx)
 
       const streakLabel = agg.currentStreak > 0
         ? t('match.trendStreak', { count: agg.currentStreak, type: t('match.streakWins') })

@@ -26,6 +26,7 @@
     "gtts": "^0.2.1",
     "libsodium-wrappers": "^0.7.11",
     "music-metadata": "^7.14.0",
+    "openai": "^6.22.0",
     "opusscript": "^0.0.8",
     "tsup": "^7.2.0",
     "tsx": "^4.19.1"

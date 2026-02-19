@@ -2,7 +2,7 @@ import { Message, EmbedBuilder, GuildMember } from 'discord.js'
 import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
 import { MatchHandler } from './MatchHandler'
 import { t, LANG } from '../i18n'
-import { askGemini, roastPrompt } from '../ai'
+import { askAI, roastPrompt } from '../ai'
 
 //  Generic roast pools (fallback when no Steam data) 
 
@@ -187,7 +187,7 @@ export class RoastHandler {
         : `You are a savage Dota 2 roast comedian. Write 3-4 roast lines about a player named ${targetName} who is probably bad at Dota. Be specific and creative. No headers, no markdown, plain text only.`
       const pool = LANG === 'pt-br' ? GENERIC_ROASTS_PTBR : GENERIC_ROASTS_ENUS
       const poolFallback = pool[Math.floor(Math.random() * pool.length)].replace(/\{name\}/g, targetName)
-      const roast = (await askGemini(genericPrompt)) ?? poolFallback
+      const roast = (await askAI(genericPrompt)) ?? poolFallback
 
       const requesterName = message.member?.displayName ?? message.author.username
       const embed = new EmbedBuilder()
@@ -259,7 +259,7 @@ export class RoastHandler {
             agg.totalFeedGames
           )
 
-      const roastText = (await askGemini(aiPrompt)) ?? hardcodedFallback
+      const roastText = (await askAI(aiPrompt)) ?? hardcodedFallback
 
       embed
         .setDescription(roastText)
