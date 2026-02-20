@@ -33,6 +33,13 @@ interface StoredTeams {
 }
 const lastTeams = new Map<string, StoredTeams>()
 
+// Tracks re-roll votes per channel — needs at least 1 vote from each team
+interface RerollVotes {
+  teamA: Set<string>  // user IDs
+  teamB: Set<string>
+}
+const rerollVotes = new Map<string, RerollVotes>()
+
 export class GroupHandler {
   // ─── !x2 / !x4 / !x5 ────────────────────────────────────────────────────
   static async startOrJoin(message: Message, size: 2 | 4 | 5) {
@@ -233,6 +240,47 @@ export class GroupHandler {
       return
     }
 
+    if (interaction.customId === 'group_reroll_heroes') {
+      const stored = lastTeams.get(channelId)
+      if (!stored) {
+        await interaction.reply({ content: t('group.noTeamData'), ephemeral: true })
+        return
+      }
+
+      const userId = interaction.user.id
+      const inA = stored.teamA.some((m) => m.id === userId)
+      const inB = stored.teamB.some((m) => m.id === userId)
+      if (!inA && !inB) {
+        await interaction.reply({ content: t('group.rerollNotInTeam'), ephemeral: true })
+        return
+      }
+
+      // Initialise vote store if needed
+      if (!rerollVotes.has(channelId)) {
+        rerollVotes.set(channelId, { teamA: new Set(), teamB: new Set() })
+      }
+      const votes = rerollVotes.get(channelId)!
+      if (inA) votes.teamA.add(userId)
+      if (inB) votes.teamB.add(userId)
+
+      // Check if at least 1 vote from each team
+      if (votes.teamA.size >= 1 && votes.teamB.size >= 1) {
+        rerollVotes.delete(channelId)
+        await interaction.deferUpdate()
+        await GroupHandler._disableButtons(interaction)
+        await GroupHandler._assignHeroesToTeams(interaction, stored.teamA, stored.teamB)
+      } else {
+        // Show current vote status
+        const votesA = votes.teamA.size
+        const votesB = votes.teamB.size
+        await interaction.reply({
+          content: t('group.rerollVoted', { votesA: String(votesA), votesB: String(votesB) }),
+          ephemeral: false,
+        })
+      }
+      return
+    }
+
     if (interaction.customId === 'group_split_channels') {
       const stored = lastTeams.get(channelId)
       if (!stored) {
@@ -245,6 +293,7 @@ export class GroupHandler {
       // Clean up — the event has started, group and team data are no longer needed
       activeGroups.delete(channelId)
       lastTeams.delete(channelId)
+      rerollVotes.delete(channelId)
       return
     }
   }
@@ -471,14 +520,21 @@ export class GroupHandler {
       embeds.push(e)
     })
 
-    const moveRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    // Reset re-roll votes whenever new heroes are assigned
+    rerollVotes.delete(interaction.channel.id)
+
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('group_reroll_heroes')
+        .setLabel(t('group.btnReroll'))
+        .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId('group_split_channels')
         .setLabel(t('group.btnMoveChannels'))
         .setStyle(ButtonStyle.Secondary)
     )
 
-    await interaction.channel.send({ embeds, components: [moveRow] })
+    await interaction.channel.send({ embeds, components: [actionRow] })
   }
 
   // ─── Voice channel splitter ───────────────────────────────────────────────
