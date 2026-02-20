@@ -12,25 +12,33 @@ const CLIP_DURATION_MS = 60_000; // 1 minute rolling buffer
 const SAMPLE_RATE = 48000;
 const CHANNELS = 2;
 const BYTES_PER_SAMPLE = 2; // 16-bit signed LE
+const FRAME_SIZE = 960; // samples per Opus frame (20ms at 48kHz)
+const FRAME_DURATION_MS = 20; // each Opus frame = 20ms
+const BYTES_PER_FRAME = FRAME_SIZE * CHANNELS * BYTES_PER_SAMPLE; // 3840 bytes per 20ms frame
 const PRUNE_INTERVAL_MS = 10_000;
 const SILENCE_TIMEOUT_MS = 2000; // re-subscribe after 2s silence
 const CLIP_COOLDOWN_MS = 30_000; // 30-second cooldown between clips
 const CLIPS_PATH = './src/assets/clips';
 
-interface AudioChunk {
-  timestamp: number;
-  data: Buffer;
+/**
+ * A speaking session represents a contiguous block of audio from one user.
+ * PCM chunks within a session are sequential — no gaps, no timestamp alignment needed.
+ */
+interface SpeakingSession {
+  startTimestamp: number;  // when this session started (Date.now())
+  pcmChunks: Buffer[];     // ordered PCM chunks (each ~3840 bytes = 20ms)
+  totalBytes: number;      // sum of all chunk lengths
 }
 
 interface UserAudioBuffer {
   userId: string;
   displayName: string;
-  chunks: AudioChunk[];
+  sessions: SpeakingSession[];
 }
 
 export class ClipHandler {
   private static userBuffers: Map<string, UserAudioBuffer> = new Map();
-  private static activeSubscriptions: Set<string> = new Set();
+  private static activeSubscriptions: Map<string, SpeakingSession> = new Map(); // userId -> current session
   private static isRecording = false;
   private static connection: VoiceConnection | null = null;
   private static guild: Guild | null = null;
@@ -43,10 +51,8 @@ export class ClipHandler {
    * Call this when the bot's voice connection becomes Ready.
    */
   static startRecording(connection: VoiceConnection, guild: Guild) {
-    // If already recording on the same connection, skip
     if (ClipHandler.isRecording && ClipHandler.connection === connection) return;
 
-    // If recording on a different connection, stop first
     if (ClipHandler.isRecording) {
       ClipHandler.stopRecording();
     }
@@ -57,7 +63,6 @@ export class ClipHandler {
 
     const receiver = connection.receiver;
 
-    // Handler for when a user starts speaking
     ClipHandler.speakingHandler = (userId: string) => {
       if (!ClipHandler.isRecording) return;
       if (ClipHandler.activeSubscriptions.has(userId)) return;
@@ -66,7 +71,6 @@ export class ClipHandler {
 
     receiver.speaking.on('start', ClipHandler.speakingHandler);
 
-    // Prune old audio data periodically
     ClipHandler.pruneInterval = setInterval(() => {
       ClipHandler.pruneOldData();
     }, PRUNE_INTERVAL_MS);
@@ -84,7 +88,7 @@ export class ClipHandler {
       try {
         (ClipHandler.connection.receiver.speaking as any).removeListener('start', ClipHandler.speakingHandler);
       } catch (e) {
-        // Ignore if already removed
+        // Ignore
       }
     }
 
@@ -103,12 +107,10 @@ export class ClipHandler {
   }
 
   /**
-   * Subscribe to a user's audio stream and buffer their PCM data.
+   * Subscribe to a user's audio stream.
+   * Each subscription = one "speaking session" with contiguous PCM data.
    */
   private static subscribeToUser(userId: string, receiver: any) {
-    ClipHandler.activeSubscriptions.add(userId);
-
-    // Get display name from guild cache
     const member = ClipHandler.guild?.members.cache.get(userId);
     const displayName = member?.displayName || member?.user?.username || userId;
 
@@ -116,13 +118,20 @@ export class ClipHandler {
       ClipHandler.userBuffers.set(userId, {
         userId,
         displayName,
-        chunks: [],
+        sessions: [],
       });
     } else {
-      // Update display name in case it changed
-      const buf = ClipHandler.userBuffers.get(userId)!;
-      buf.displayName = displayName;
+      ClipHandler.userBuffers.get(userId)!.displayName = displayName;
     }
+
+    // Create a new speaking session
+    const session: SpeakingSession = {
+      startTimestamp: Date.now(),
+      pcmChunks: [],
+      totalBytes: 0,
+    };
+
+    ClipHandler.activeSubscriptions.set(userId, session);
 
     try {
       const opusStream = receiver.subscribe(userId, {
@@ -132,42 +141,47 @@ export class ClipHandler {
         },
       });
 
-      // Decode Opus to PCM using prism-media (ships with @discordjs/voice)
       const prism = require('prism-media');
       const decoder = new prism.opus.Decoder({
         rate: SAMPLE_RATE,
         channels: CHANNELS,
-        frameSize: 960,
+        frameSize: FRAME_SIZE,
       });
 
       const pcmStream = opusStream.pipe(decoder);
 
       pcmStream.on('data', (chunk: Buffer) => {
-        const buffer = ClipHandler.userBuffers.get(userId);
-        if (buffer) {
-          buffer.chunks.push({
-            timestamp: Date.now(),
-            data: Buffer.from(chunk), // copy to avoid buffer reuse issues
-          });
+        // Append chunk sequentially — no timestamp per chunk needed
+        const copied = Buffer.from(chunk);
+        session.pcmChunks.push(copied);
+        session.totalBytes += copied.length;
+      });
+
+      let finished = false;
+      const finishSession = () => {
+        if (finished) return;
+        finished = true;
+        ClipHandler.activeSubscriptions.delete(userId);
+        // Only save sessions that have actual audio data
+        if (session.totalBytes > 0) {
+          const userBuf = ClipHandler.userBuffers.get(userId);
+          if (userBuf) {
+            userBuf.sessions.push(session);
+          }
         }
-      });
+      };
 
-      pcmStream.on('end', () => {
-        ClipHandler.activeSubscriptions.delete(userId);
-      });
-
-      pcmStream.on('close', () => {
-        ClipHandler.activeSubscriptions.delete(userId);
-      });
+      pcmStream.on('end', finishSession);
+      pcmStream.on('close', finishSession);
 
       pcmStream.on('error', (err: Error) => {
         console.error(`ClipHandler: PCM stream error for ${displayName}:`, err.message);
-        ClipHandler.activeSubscriptions.delete(userId);
+        finishSession();
       });
 
       opusStream.on('error', (err: Error) => {
         console.error(`ClipHandler: Opus stream error for ${displayName}:`, err.message);
-        ClipHandler.activeSubscriptions.delete(userId);
+        finishSession();
       });
     } catch (err) {
       console.error(`ClipHandler: Failed to subscribe to user ${displayName}:`, err);
@@ -176,21 +190,22 @@ export class ClipHandler {
   }
 
   /**
-   * Remove audio chunks older than the clip duration.
+   * Remove sessions older than the clip duration.
    */
   private static pruneOldData() {
     const cutoff = Date.now() - CLIP_DURATION_MS;
     for (const [userId, buffer] of ClipHandler.userBuffers) {
-      buffer.chunks = buffer.chunks.filter(chunk => chunk.timestamp >= cutoff);
-      if (buffer.chunks.length === 0) {
+      buffer.sessions = buffer.sessions.filter(session => {
+        return ClipHandler.sessionEndTime(session) >= cutoff;
+      });
+      if (buffer.sessions.length === 0 && !ClipHandler.activeSubscriptions.has(userId)) {
         ClipHandler.userBuffers.delete(userId);
       }
     }
   }
 
   /**
-   * Handle the !clip command: export the last 60 seconds of audio.
-   * Sends a mixed MP3 + a ZIP with individual user MP3 files.
+   * Handle the !clip command.
    */
   static async handleClip(message: Message) {
     if (!ClipHandler.isRecording) {
@@ -212,11 +227,14 @@ export class ClipHandler {
       return;
     }
 
-    // Check if there is any recent data
     const cutoff = now - CLIP_DURATION_MS;
     let hasRecentData = false;
     for (const [, buffer] of ClipHandler.userBuffers) {
-      if (buffer.chunks.some(c => c.timestamp >= cutoff)) {
+      const activeSession = ClipHandler.activeSubscriptions.get(buffer.userId);
+      const allSessions = activeSession && activeSession.totalBytes > 0
+        ? [...buffer.sessions, activeSession]
+        : buffer.sessions;
+      if (allSessions.some(s => s.startTimestamp >= cutoff || ClipHandler.sessionEndTime(s) >= cutoff)) {
         hasRecentData = true;
         break;
       }
@@ -227,13 +245,11 @@ export class ClipHandler {
       return;
     }
 
-    // Lock the cooldown immediately so concurrent requests are rejected
     ClipHandler.lastClipTimestamp = Date.now();
 
     const statusMsg = await message.reply('🎙️ Processing clip... This may take a few seconds.');
 
     try {
-      // Ensure clips directory exists
       if (!fs.existsSync(CLIPS_PATH)) {
         fs.mkdirSync(CLIPS_PATH, { recursive: true });
       }
@@ -242,60 +258,76 @@ export class ClipHandler {
       const clipDir = path.join(CLIPS_PATH, `clip-${timestamp}`);
       fs.mkdirSync(clipDir, { recursive: true });
 
-      const userMp3Files: string[] = [];
-      const userPcmBuffers: { displayName: string; pcm: Buffer }[] = [];
+      const userPcmFiles: { displayName: string; pcmPath: string; mp3Path: string }[] = [];
 
-      // Process each user's audio
+      // Build per-user PCM files using session-based alignment
       for (const [userId, buffer] of ClipHandler.userBuffers) {
-        const relevantChunks = buffer.chunks.filter(c => c.timestamp >= cutoff);
-        if (relevantChunks.length === 0) continue;
+        // Snapshot the currently active session too
+        const activeSession = ClipHandler.activeSubscriptions.get(userId);
+        const allSessions = activeSession && activeSession.totalBytes > 0
+          ? [...buffer.sessions, {
+              startTimestamp: activeSession.startTimestamp,
+              pcmChunks: [...activeSession.pcmChunks],
+              totalBytes: activeSession.totalBytes,
+            }]
+          : [...buffer.sessions];
 
-        // Build a timeline-aligned PCM buffer (silence where user wasn't speaking)
-        const userPcm = ClipHandler.buildAlignedPcm(relevantChunks, cutoff, now);
+        // Filter to sessions within our time window
+        const relevantSessions = allSessions.filter(s =>
+          s.startTimestamp >= cutoff || ClipHandler.sessionEndTime(s) >= cutoff
+        );
+
+        if (relevantSessions.length === 0) continue;
+
+        // Build timeline-aligned PCM using session boundaries
+        const userPcm = ClipHandler.buildSessionAlignedPcm(relevantSessions, cutoff, now);
+
         const safeName = buffer.displayName.replace(/[^a-zA-Z0-9_\-\s]/g, '').replace(/\s+/g, '_');
         const fileName = `${safeName}_${timestamp}`;
-
-        userPcmBuffers.push({ displayName: buffer.displayName, pcm: userPcm });
-
-        // Convert individual user PCM to MP3
         const pcmPath = path.join(clipDir, `${fileName}.pcm`);
         const mp3Path = path.join(clipDir, `${fileName}.mp3`);
 
         fs.writeFileSync(pcmPath, userPcm);
-        await ClipHandler.pcmToMp3(pcmPath, mp3Path);
-        fs.unlinkSync(pcmPath); // clean up PCM
-
-        userMp3Files.push(mp3Path);
+        userPcmFiles.push({ displayName: buffer.displayName, pcmPath, mp3Path });
       }
 
-      if (userMp3Files.length === 0) {
+      if (userPcmFiles.length === 0) {
         await statusMsg.edit('⚠️ No audio data could be processed.');
         return;
       }
 
-      // Mix all PCM buffers into a combined MP3
-      const allPcmData = userPcmBuffers.map(u => u.pcm);
-      const mixedPcm = ClipHandler.mixPcmBuffers(allPcmData);
-      const mixedPcmPath = path.join(clipDir, `mixed_${timestamp}.pcm`);
+      // Convert individual PCM files to MP3
+      for (const entry of userPcmFiles) {
+        await ClipHandler.pcmToMp3(entry.pcmPath, entry.mp3Path);
+      }
+
+      // Mix all user PCM files into one MP3 using ffmpeg amix
       const mixedMp3Path = path.join(clipDir, `mixed_${timestamp}.mp3`);
 
-      fs.writeFileSync(mixedPcmPath, mixedPcm);
-      await ClipHandler.pcmToMp3(mixedPcmPath, mixedMp3Path);
-      fs.unlinkSync(mixedPcmPath); // clean up PCM
+      if (userPcmFiles.length === 1) {
+        fs.copyFileSync(userPcmFiles[0].mp3Path, mixedMp3Path);
+      } else {
+        await ClipHandler.mixWithFfmpeg(
+          userPcmFiles.map(u => u.pcmPath),
+          mixedMp3Path
+        );
+      }
+
+      // Clean up PCM files
+      for (const entry of userPcmFiles) {
+        fs.unlinkSync(entry.pcmPath);
+      }
 
       // Create ZIP of individual user MP3 files
+      const userMp3Paths = userPcmFiles.map(u => u.mp3Path);
       const zipPath = path.join(clipDir, `individual_${timestamp}.zip`);
-      await ClipHandler.createZip(userMp3Files, zipPath);
+      await ClipHandler.createZip(userMp3Paths, zipPath);
 
-      // Build description of who was recorded
-      const userList = userPcmBuffers.map(u => u.displayName).join(', ');
-
-      // Send files to channel
+      const userList = userPcmFiles.map(u => u.displayName).join(', ');
       const filesToSend = [mixedMp3Path, zipPath];
 
-      // Check total file size (Discord limit: 25MB for most servers)
       const totalSize = filesToSend.reduce((sum, f) => sum + fs.statSync(f).size, 0);
-      const maxSize = 25 * 1024 * 1024; // 25MB
+      const maxSize = 25 * 1024 * 1024;
 
       if (totalSize > maxSize) {
         await statusMsg.edit(
@@ -318,58 +350,106 @@ export class ClipHandler {
   }
 
   /**
-   * Build a PCM buffer aligned to a timeline, filling silence where no data exists.
+   * Calculate when a session ends based on its start time and data length.
    */
-  private static buildAlignedPcm(chunks: AudioChunk[], startTime: number, endTime: number): Buffer {
+  private static sessionEndTime(session: SpeakingSession): number {
+    const durationMs = (session.totalBytes / (SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE)) * 1000;
+    return session.startTimestamp + durationMs;
+  }
+
+  /**
+   * Build a PCM buffer aligned to a timeline using session boundaries.
+   *
+   * Within each session, PCM frames are contiguous (no per-chunk timestamps).
+   * Silence is inserted between sessions based on their start timestamps.
+   * This avoids the jitter/click artifacts from per-chunk timestamp alignment.
+   */
+  private static buildSessionAlignedPcm(
+    sessions: SpeakingSession[],
+    startTime: number,
+    endTime: number
+  ): Buffer {
     const totalDurationMs = endTime - startTime;
-    const totalSamples = Math.floor((totalDurationMs / 1000) * SAMPLE_RATE);
-    const totalBytes = totalSamples * CHANNELS * BYTES_PER_SAMPLE;
+    const totalBytes = Math.floor((totalDurationMs / 1000) * SAMPLE_RATE) * CHANNELS * BYTES_PER_SAMPLE;
     const output = Buffer.alloc(totalBytes); // zeros = silence
 
-    for (const chunk of chunks) {
-      const offsetMs = chunk.timestamp - startTime;
-      const offsetSamples = Math.floor((offsetMs / 1000) * SAMPLE_RATE);
-      const offsetBytes = offsetSamples * CHANNELS * BYTES_PER_SAMPLE;
+    // Sort sessions by start time
+    const sorted = [...sessions].sort((a, b) => a.startTimestamp - b.startTimestamp);
 
-      if (offsetBytes >= 0 && offsetBytes + chunk.data.length <= totalBytes) {
-        chunk.data.copy(output, offsetBytes);
-      } else if (offsetBytes >= 0 && offsetBytes < totalBytes) {
-        // Partial copy at the end
-        const bytesToCopy = Math.min(chunk.data.length, totalBytes - offsetBytes);
-        chunk.data.copy(output, offsetBytes, 0, bytesToCopy);
-      }
-    }
+    for (const session of sorted) {
+      // Calculate where this session starts in the output buffer
+      const offsetMs = Math.max(0, session.startTimestamp - startTime);
+      // Snap to frame boundary to avoid mid-sample placement
+      const offsetFrames = Math.round(offsetMs / FRAME_DURATION_MS);
+      let writePos = offsetFrames * BYTES_PER_FRAME;
 
-    return output;
-  }
+      // Concatenate all chunks in this session sequentially
+      for (const chunk of session.pcmChunks) {
+        if (writePos >= totalBytes) break;
 
-  /**
-   * Mix multiple PCM buffers together by summing samples with clamping.
-   */
-  private static mixPcmBuffers(buffers: Buffer[]): Buffer {
-    if (buffers.length === 0) return Buffer.alloc(0);
-    if (buffers.length === 1) return Buffer.from(buffers[0]);
-
-    const maxLength = Math.max(...buffers.map(b => b.length));
-    const output = Buffer.alloc(maxLength);
-
-    for (let i = 0; i < maxLength; i += BYTES_PER_SAMPLE) {
-      let mixed = 0;
-      for (const buf of buffers) {
-        if (i + 1 < buf.length) {
-          mixed += buf.readInt16LE(i);
+        const bytesToCopy = Math.min(chunk.length, totalBytes - writePos);
+        if (bytesToCopy > 0) {
+          chunk.copy(output, writePos, 0, bytesToCopy);
+          writePos += bytesToCopy;
         }
       }
-      // Clamp to signed 16-bit range
-      mixed = Math.max(-32768, Math.min(32767, mixed));
-      output.writeInt16LE(mixed, i);
     }
 
     return output;
   }
 
   /**
-   * Convert raw PCM file to MP3 using ffmpeg.
+   * Mix multiple raw PCM files into a single MP3 using ffmpeg's amix filter.
+   * This produces much better quality than manual sample addition.
+   */
+  private static mixWithFfmpeg(pcmPaths: string[], outputMp3Path: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const ffmpegPath = require('ffmpeg-static');
+
+      const args: string[] = ['-y'];
+
+      for (const pcmPath of pcmPaths) {
+        args.push(
+          '-f', 's16le',
+          '-ar', String(SAMPLE_RATE),
+          '-ac', String(CHANNELS),
+          '-i', pcmPath
+        );
+      }
+
+      // amix filter: combine all inputs, normalize to prevent clipping
+      const inputCount = pcmPaths.length;
+      args.push(
+        '-filter_complex',
+        `amix=inputs=${inputCount}:duration=longest:dropout_transition=0:normalize=1`,
+        '-codec:a', 'libmp3lame',
+        '-b:a', '192k',
+        outputMp3Path
+      );
+
+      const ffmpeg = spawn(ffmpegPath, args);
+
+      let stderr = '';
+      ffmpeg.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`ffmpeg mix exited with code ${code}: ${stderr}`));
+        }
+      });
+
+      ffmpeg.on('error', (err) => {
+        reject(new Error(`ffmpeg mix spawn error: ${err.message}`));
+      });
+    });
+  }
+
+  /**
+   * Convert raw PCM file to MP3 using ffmpeg with high quality settings.
    */
   private static pcmToMp3(pcmPath: string, mp3Path: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -381,7 +461,7 @@ export class ClipHandler {
         '-ac', String(CHANNELS),
         '-i', pcmPath,
         '-codec:a', 'libmp3lame',
-        '-qscale:a', '2',
+        '-b:a', '192k',       // 192kbps CBR for clear voice
         mp3Path,
       ]);
 
