@@ -79,6 +79,7 @@ import { RoastHandler } from './handlers/RoastHandler'
 import { PollHandler } from './handlers/PollHandler'
 import { BetHandler } from './handlers/BetHandler'
 import { GroupHandler } from './handlers/GroupHandler'
+import { ClipHandler } from './handlers/ClipHandler'
 
 import { calculateTextWidth } from './utils'
 
@@ -209,6 +210,12 @@ client.on('messageCreate', async (message: Message) => {
         return
       }
       message.reply('Usage: `!votekick <nickname>`')
+      return
+    }
+
+    // Voice Clip: !clip - save last 60 seconds of voice chat
+    if (messageContent === '!clip') {
+      await ClipHandler.handleClip(message)
       return
     }
 
@@ -348,6 +355,7 @@ client.on('messageCreate', async (message: Message) => {
           { name: '🎵 Sound', value: '`!play <name>` — Play a sound\n`!sounds` — List sounds (slash)', inline: false },
           { name: '🎮 Dota 2', value: '`!random <count/players>` — Randomize heroes\n`!lastmatch [@user|nick]` — Last 10 match analysis\n`!match <steam_id>` — Last match recap (legacy)', inline: false },
           { name: '🔫 Kick', value: '`!randomckick` — Russian roulette (random kick)\n`!votekick <nick>` — Start a votekick\n`!voteyes` — Vote yes on active votekick', inline: false },
+          { name: '🎙️ Clip', value: '`!clip` — Save the last 60 seconds of voice chat as MP3 + individual tracks ZIP', inline: false },
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
           { name: '🔥 Fun', value: '`!roast @user` — Roast someone (career stats)\n`!roastlast [@user|nick]` — Deep roast of last match (items, build, position)\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
           { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet @player` — Cancel your bet on that player\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },

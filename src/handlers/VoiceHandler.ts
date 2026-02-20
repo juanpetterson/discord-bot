@@ -12,6 +12,7 @@ import {
 import type Discord from 'discord.js';
 import * as mm from 'music-metadata';
 import { DEFAULT_ASSET_PATH } from '../constants';
+import { ClipHandler } from './ClipHandler';
 // import { QueueHandler } from './QueueHandler';
 
 export class VoiceHandler {
@@ -52,6 +53,8 @@ export class VoiceHandler {
           channelId: channel.id,
           guildId: channel.guild.id,
           adapterCreator: channel.guild.voiceAdapterCreator as any,
+          selfDeaf: false,
+          selfMute: false,
         })
 
         VoiceHandler.connectionChannelId = channel.id
@@ -65,6 +68,8 @@ export class VoiceHandler {
       };
 
       if (VoiceHandler.connectionIsReady) {
+        // Ensure clip recording is active
+        ClipHandler.startRecording(connection, channel.guild);
         VoiceHandler.playSound(filePath, durationInMilliseconds)
         return;
       }
@@ -75,14 +80,19 @@ export class VoiceHandler {
           'The connection has entered the Ready state - ready to play audio!'
         )
 
+        // Start clip recording when connection is ready
+        ClipHandler.startRecording(connection, channel.guild);
+
         VoiceHandler.playSound(filePath, durationInMilliseconds)
       })
 
       connection.on(VoiceConnectionStatus.Disconnected, () => {
+        ClipHandler.stopRecording();
         VoiceHandler.destroyConnection();
       })
 
       connection.on(VoiceConnectionStatus.Destroyed, () => {
+        ClipHandler.stopRecording();
         VoiceHandler.destroyConnection();
       })
 
