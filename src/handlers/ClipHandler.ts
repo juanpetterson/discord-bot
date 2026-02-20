@@ -14,6 +14,7 @@ const CHANNELS = 2;
 const BYTES_PER_SAMPLE = 2; // 16-bit signed LE
 const PRUNE_INTERVAL_MS = 10_000;
 const SILENCE_TIMEOUT_MS = 2000; // re-subscribe after 2s silence
+const CLIP_COOLDOWN_MS = 30_000; // 30-second cooldown between clips
 const CLIPS_PATH = './src/assets/clips';
 
 interface AudioChunk {
@@ -35,6 +36,7 @@ export class ClipHandler {
   private static guild: Guild | null = null;
   private static pruneInterval: NodeJS.Timeout | null = null;
   private static speakingHandler: ((userId: string) => void) | null = null;
+  private static lastClipTimestamp = 0;
 
   /**
    * Start recording audio from all users in the voice channel.
@@ -196,13 +198,21 @@ export class ClipHandler {
       return;
     }
 
+    // Cooldown check
+    const now = Date.now();
+    const elapsed = now - ClipHandler.lastClipTimestamp;
+    if (elapsed < CLIP_COOLDOWN_MS) {
+      const remaining = Math.ceil((CLIP_COOLDOWN_MS - elapsed) / 1000);
+      message.reply(`⏳ Clip is on cooldown. Try again in **${remaining}s**.`);
+      return;
+    }
+
     if (ClipHandler.userBuffers.size === 0) {
       message.reply('⚠️ No audio data recorded yet. Make sure people are talking in the voice channel.');
       return;
     }
 
     // Check if there is any recent data
-    const now = Date.now();
     const cutoff = now - CLIP_DURATION_MS;
     let hasRecentData = false;
     for (const [, buffer] of ClipHandler.userBuffers) {
@@ -216,6 +226,9 @@ export class ClipHandler {
       message.reply('⚠️ No audio data in the last 60 seconds.');
       return;
     }
+
+    // Lock the cooldown immediately so concurrent requests are rejected
+    ClipHandler.lastClipTimestamp = Date.now();
 
     const statusMsg = await message.reply('🎙️ Processing clip... This may take a few seconds.');
 
