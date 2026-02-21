@@ -436,7 +436,21 @@ export class MatchHandler {
 
   /** New entry point: !lastmatch @user | <nick> */
   static async lastMatch(message: Message, args: string) {
-    const resolved = resolveSteamId(message, args.trim())
+    const trimmed = args.trim()
+
+    // If no args provided, look up the command author's own Steam ID
+    let resolved: { steamId: string; displayName: string } | null = null
+    if (!trimmed) {
+      const authorName = message.author.username
+      const steamId = DISCORD_TO_STEAM[authorName]
+        ?? DISCORD_TO_STEAM[Object.keys(DISCORD_TO_STEAM).find(k => k.toLowerCase() === authorName.toLowerCase()) ?? '']
+      if (steamId) {
+        resolved = { steamId, displayName: message.member?.displayName ?? authorName }
+      }
+    } else {
+      resolved = resolveSteamId(message, trimmed)
+    }
+
     if (!resolved) {
       const available = Object.keys(DISCORD_TO_STEAM).join(', ')
       message.reply(t('match.notFound', { nicks: available }))
