@@ -3,4 +3,5 @@
 .vercel
 dist
 /src/assets/uploads
-/src/assets/data
+/src/assets/data/quotes.json
+/src/assets/data/dota-nicks.json
