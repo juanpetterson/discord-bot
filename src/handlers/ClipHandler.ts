@@ -7,6 +7,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import archiver from 'archiver';
+import { t } from '../i18n';
 
 const CLIP_DURATION_MS = 60_000; // 1 minute rolling buffer
 const SAMPLE_RATE = 48000;
@@ -209,7 +210,7 @@ export class ClipHandler {
    */
   static async handleClip(message: Message) {
     if (!ClipHandler.isRecording) {
-      message.reply('⚠️ Not currently recording. The bot needs to be in a voice channel.');
+      message.reply(t('clip.notRecording'));
       return;
     }
 
@@ -218,12 +219,12 @@ export class ClipHandler {
     const elapsed = now - ClipHandler.lastClipTimestamp;
     if (elapsed < CLIP_COOLDOWN_MS) {
       const remaining = Math.ceil((CLIP_COOLDOWN_MS - elapsed) / 1000);
-      message.reply(`⏳ Clip is on cooldown. Try again in **${remaining}s**.`);
+      message.reply(t('clip.cooldown', { remaining }));
       return;
     }
 
     if (ClipHandler.userBuffers.size === 0) {
-      message.reply('⚠️ No audio data recorded yet. Make sure people are talking in the voice channel.');
+      message.reply(t('clip.noData'));
       return;
     }
 
@@ -241,13 +242,13 @@ export class ClipHandler {
     }
 
     if (!hasRecentData) {
-      message.reply('⚠️ No audio data in the last 60 seconds.');
+      message.reply(t('clip.noRecentData'));
       return;
     }
 
     ClipHandler.lastClipTimestamp = Date.now();
 
-    const statusMsg = await message.reply('🎙️ Processing clip... This may take a few seconds.');
+    const statusMsg = await message.reply(t('clip.processing'));
 
     try {
       if (!fs.existsSync(CLIPS_PATH)) {
@@ -292,7 +293,7 @@ export class ClipHandler {
       }
 
       if (userPcmFiles.length === 0) {
-        await statusMsg.edit('⚠️ No audio data could be processed.');
+        await statusMsg.edit(t('clip.noAudioProcessed'));
         return;
       }
 
@@ -331,13 +332,13 @@ export class ClipHandler {
 
       if (totalSize > maxSize) {
         await statusMsg.edit(
-          `⚠️ The clip files are too large to upload (${(totalSize / 1024 / 1024).toFixed(1)}MB). Files saved locally at: \`${clipDir}\``
+          t('clip.tooLarge', { size: (totalSize / 1024 / 1024).toFixed(1), path: clipDir })
         );
         return;
       }
 
       await message.channel.send({
-        content: `🎙️ **Voice Clip** (last 60 seconds)\n👥 **Recorded:** ${userList}\n📁 Mixed MP3 + ZIP with individual tracks`,
+        content: t('clip.success', { users: userList }),
         files: filesToSend,
       });
 
@@ -345,7 +346,7 @@ export class ClipHandler {
 
     } catch (err) {
       console.error('ClipHandler: Error processing clip:', err);
-      await statusMsg.edit('❌ An error occurred while processing the clip. Check console for details.').catch(() => {});
+      await statusMsg.edit(t('clip.error')).catch(() => {});
     }
   }
 
@@ -418,10 +419,15 @@ export class ClipHandler {
       }
 
       // amix filter: combine all inputs, normalize to prevent clipping
+      // Then enhance: band-pass voice frequencies, reduce noise, boost & normalize volume
       const inputCount = pcmPaths.length;
       args.push(
         '-filter_complex',
-        `amix=inputs=${inputCount}:duration=longest:dropout_transition=0:normalize=1`,
+        `amix=inputs=${inputCount}:duration=longest:dropout_transition=0:normalize=1,` +
+        `highpass=f=80,lowpass=f=12000,` +                   // keep voice-band frequencies
+        `afftdn=nf=-20:nt=w,` +                              // FFT-based noise reduction
+        `volume=2.0,` +                                      // boost overall volume
+        `dynaudnorm=f=150:g=15:p=0.95:m=10:s=5`,            // dynamic normalization for even loudness
         '-codec:a', 'libmp3lame',
         '-b:a', '192k',
         outputMp3Path
@@ -460,8 +466,15 @@ export class ClipHandler {
         '-ar', String(SAMPLE_RATE),
         '-ac', String(CHANNELS),
         '-i', pcmPath,
+        '-af', [
+          'highpass=f=80',              // remove low-frequency rumble
+          'lowpass=f=12000',            // remove high-frequency hiss
+          'afftdn=nf=-20:nt=w',        // FFT-based noise reduction
+          'volume=2.0',                 // boost quiet audio
+          'dynaudnorm=f=150:g=15:p=0.95:m=10:s=5',  // even out volume levels
+        ].join(','),
         '-codec:a', 'libmp3lame',
-        '-b:a', '192k',       // 192kbps CBR for clear voice
+        '-b:a', '192k',                // 192kbps CBR for clear voice
         mp3Path,
       ]);
 
