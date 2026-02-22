@@ -129,6 +129,44 @@ function httpsGet(url: string): Promise<any> {
   })
 }
 
+function httpsPost(url: string): Promise<any> {
+  return new Promise((resolve) => {
+    const req = https.request(url, {
+      method: 'POST',
+      headers: { 'User-Agent': 'discord-bot/1.0' },
+    }, (res) => {
+      let body = ''
+      res.on('data', (chunk: any) => (body += chunk))
+      res.on('end', () => { try { resolve(JSON.parse(body)) } catch { resolve(null) } })
+    })
+    req.on('error', () => resolve(null))
+    req.end()
+  })
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/** Fetch match data, requesting a parse from OpenDota if ward/observer data is missing */
+async function fetchMatchWithParsing(matchId: number): Promise<any> {
+  // First attempt – check if already parsed
+  let fullMatch = await httpsGet(`${OPENDOTA_API}/matches/${matchId}`)
+  if (fullMatch?.version) return fullMatch
+
+  // Request parsing from OpenDota
+  await httpsPost(`${OPENDOTA_API}/request/${matchId}`)
+
+  // Poll for parsed data (up to ~25 seconds)
+  for (let i = 0; i < 5; i++) {
+    await sleep(5000)
+    fullMatch = await httpsGet(`${OPENDOTA_API}/matches/${matchId}`)
+    if (fullMatch?.version) return fullMatch
+  }
+
+  return fullMatch // return whatever we have (unparsed)
+}
+
 async function loadHeroMap() {
   if (Object.keys(heroMap).length > 0) return
   const heroes = await httpsGet(`${OPENDOTA_API}/heroes`)
@@ -594,11 +632,15 @@ export class MatchHandler {
       const agg = computeAggregate(matches)
       const m = matches[0]
 
-      // Fetch full match details for items, lane role, net worth, etc.
-      const fullMatch = await httpsGet(`${OPENDOTA_API}/matches/${m.match_id}`)
+      // Fetch full match details for items, lane role, net worth, obs/sen etc.
+      // Uses fetchMatchWithParsing to request a parse from OpenDota if needed,
+      // so that ward/observer data (obs_placed, sen_placed, camps_stacked) is available.
+      const fullMatch = await fetchMatchWithParsing(m.match_id)
       const fullPlayer = fullMatch?.players?.find(
         (p: any) => p.account_id === Number(accountId)
       )
+
+      const isParsed = !!fullMatch?.version
 
       const isRadiant = m.player_slot < 128
       const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
@@ -616,6 +658,12 @@ export class MatchHandler {
           if (name) rawItems.push(name)
         }
       }
+
+      // Ward/stack data is only available in parsed matches.
+      // Use -1 to signal "data not available" so callers can show N/A instead of 0.
+      const obsPlaced  = isParsed ? (fullPlayer?.obs_placed   ?? 0) : -1
+      const senPlaced  = isParsed ? (fullPlayer?.sen_placed   ?? 0) : -1
+      const campsStacked = isParsed ? (fullPlayer?.camps_stacked ?? 0) : -1
 
       return {
         matchId: m.match_id,
@@ -640,9 +688,9 @@ export class MatchHandler {
         laneRole: laneRoleName(fullPlayer?.lane_role ?? 0),
         laneRoleId: fullPlayer?.lane_role ?? 0,
         items: rawItems,
-        obsPlaced: fullPlayer?.obs_placed ?? 0,
-        senPlaced: fullPlayer?.sen_placed ?? 0,
-        campsStacked: fullPlayer?.camps_stacked ?? 0,
+        obsPlaced,
+        senPlaced,
+        campsStacked,
         startTime: m.start_time,
         agg,
       }

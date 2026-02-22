@@ -57,6 +57,7 @@ const translations = {
     'roastlast.fieldNetWorth': '\ud83d\udcb8 Net Worth',
     'roastlast.fieldItems': '\ud83d\udee1\ufe0f Build Final',
     'roastlast.fieldWards': '\ud83d\udc41\ufe0f Wards / Stacks',
+    'roastlast.wardsNotParsed': '\u26a0\ufe0f Dados n\u00e3o dispon\u00edveis (partida n\u00e3o analisada pelo OpenDota)',
     'roastlast.noItems': 'Nenhum item registrado',
     'roastlast.footer': '{name} \u2022 {date} \u2022 Match {id} \u2022 Pedido por {requester}',
 
@@ -238,6 +239,7 @@ const translations = {
     'roastlast.fieldNetWorth': '\ud83d\udcb8 Net Worth',
     'roastlast.fieldItems': '\ud83d\udee1\ufe0f Final Build',
     'roastlast.fieldWards': '\ud83d\udc41\ufe0f Wards / Stacks',
+    'roastlast.wardsNotParsed': '\u26a0\ufe0f Data not available (match not parsed by OpenDota)',
     'roastlast.noItems': 'No items recorded',
     'roastlast.footer': '{name} \u2022 {date} \u2022 Match {id} \u2022 Requested by {requester}',
 

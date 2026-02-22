@@ -182,7 +182,7 @@ function roastLastFallbackPtBr(name: string, d: LastMatchFull): string {
   else if (d.won && d.kda >= 8)
     lines.push(`${d.kills}/${d.deaths}/${d.assists} de ${d.hero}. Ok, ${name} absurdamente dominou. Isso s\u00f3 acontece em mirror match de KDA.`)
 
-  // Support wards
+  // Support wards (only roast if data is available, i.e. obsPlaced >= 0)
   if ((d.laneRoleId === 4 || d.laneRoleId === 5) && d.obsPlaced === 0)
     lines.push(`${name} jogou suporte de ${d.hero} e comprou 0 wards. Isso n\u00e3o \u00e9 suporte, \u00e9 carry com menos farm.`)
 
@@ -224,6 +224,7 @@ function roastLastFallbackEnUs(name: string, d: LastMatchFull): string {
   else if (d.won && d.kda >= 8)
     lines.push(`${d.kills}/${d.deaths}/${d.assists} on ${d.hero}. Fine, ${name} went absolutely nuclear this game. Suspicious.`)
 
+  // Support wards (only roast if data is available, i.e. obsPlaced >= 0)
   if ((d.laneRoleId === 4 || d.laneRoleId === 5) && d.obsPlaced === 0)
     lines.push(`${name} played support ${d.hero} and placed 0 observer wards. That's not support\u2014that's a carry with no farm.`)
 
@@ -479,7 +480,9 @@ export class RoastHandler {
         { name: t('roastlast.fieldItems'), value: itemDisplay, inline: false },
         {
           name: t('roastlast.fieldWards'),
-          value: `👁 ${data.obsPlaced} obs  |  🔴 ${data.senPlaced} sen  |  🏕 ${data.campsStacked} stacks`,
+          value: data.obsPlaced < 0
+            ? t('roastlast.wardsNotParsed')
+            : `👁 ${data.obsPlaced} obs  |  🔴 ${data.senPlaced} sen  |  🏕 ${data.campsStacked} stacks`,
           inline: false,
         },
         {

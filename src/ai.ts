@@ -196,8 +196,8 @@ Analyze this player's last match in depth and roast them. Consider ALL of the fo
 - Was the item build appropriate for this hero and role? (e.g. no BKB on a carry who should have it, support items on a carry, etc.)
 - Was their KDA acceptable for their lane role? (supports dying a lot is expected but carries feeding is inexcusable)
 - Is ${gpm} GPM good or bad for a ${laneRole} player? (carries need high GPM, supports don't)
-- Did they buy wards? (${obsPlaced} obs, ${senPlaced} sentries — if support and 0 wards, roast hard)
-- Did they stack camps? (${campsStacked} stacks — if pos1/pos2 and 0 stacks, mention it)
+- Did they buy wards? (${obsPlaced < 0 ? 'ward data not available — match not parsed' : `${obsPlaced} obs, ${senPlaced} sentries`} — if support and 0 wards, roast hard; if data not available, skip ward roast)
+- Did they stack camps? (${campsStacked < 0 ? 'data not available' : `${campsStacked} stacks`} — if pos1/pos2 and 0 stacks, mention it; if data not available, skip)
 - Last hits (${lastHits}) vs denies (${denies}) — relevant for mid/carry
 - ${isTurbo ? 'THIS IS A TURBO MATCH — mock them for playing Turbo if stats are bad, or acknowledge they at least kept it short' : 'This is a normal match'}
 - If the match was genuinely impressive (deathless, huge damage, perfect build), acknowledge it briefly but still find something to tease
