@@ -158,6 +158,8 @@ export function roastLastMatchPrompt(opts: {
   isTurbo: boolean
   gameMode: string
   laneRole: string
+  positionLabel: string
+  position: number
   items: string[]
   obsPlaced: number
   senPlaced: number
@@ -167,13 +169,33 @@ export function roastLastMatchPrompt(opts: {
   winRate: number
   streak: number
   total: number
+  // Rich parsed data
+  itemTimings: { item: string; time: number }[]
+  killedBy: Record<string, number>
+  nemesis: { hero: string; count: number } | null
+  benchmarks: {
+    gpmPct: number; xpmPct: number; killsPct: number
+    lastHitsPct: number; heroDmgPct: number; towerDmgPct: number
+  } | null
+  teamfightParticipation: number
+  laneEfficiency: number
+  timeSpentDead: number
+  stunSeconds: number
+  buybackCount: number
+  sentryKills: number
+  observerKills: number
+  courierKills: number
+  isParsed: boolean
 }): string {
   const {
     lang, name, hero, kills, deaths, assists, kda, gpm, xpm,
     heroDamage, towerDamage, lastHits, denies, netWorth, level,
-    duration, won, isTurbo, gameMode, laneRole, items,
+    duration, won, isTurbo, gameMode, laneRole, positionLabel, position, items,
     obsPlaced, senPlaced, campsStacked, avgDeaths, avgKDA,
     winRate, streak, total,
+    itemTimings, killedBy, nemesis, benchmarks,
+    teamfightParticipation, laneEfficiency, timeSpentDead, stunSeconds,
+    buybackCount, sentryKills, observerKills, courierKills, isParsed,
   } = opts
 
   const mins = Math.floor(duration / 60)
@@ -183,8 +205,23 @@ export function roastLastMatchPrompt(opts: {
     : streak < 0
     ? `${Math.abs(streak)}-loss streak`
     : 'no current streak'
-  const isSupport = laneRole.includes('Support')
-  const isCarry = laneRole.includes('Safe Lane') || laneRole.includes('Mid')
+  const isSupport = position >= 4
+  const isCore = position <= 3 && position >= 1
+
+  // Format item timings
+  const itemTimingStr = itemTimings.length > 0
+    ? itemTimings.slice(0, 8).map(t => `${t.item} at ${Math.floor(t.time / 60)}:${(t.time % 60).toString().padStart(2, '0')}`).join(', ')
+    : 'not available'
+
+  // Format killed-by breakdown
+  const killedByStr = Object.keys(killedBy).length > 0
+    ? Object.entries(killedBy).sort((a, b) => b[1] - a[1]).map(([h, c]) => `${h} (${c}x)`).join(', ')
+    : 'not available'
+
+  // Format benchmarks
+  const benchStr = benchmarks
+    ? `GPM: top ${Math.round((benchmarks.gpmPct) * 100)}%, XPM: top ${Math.round((benchmarks.xpmPct) * 100)}%, Kills: top ${Math.round((benchmarks.killsPct) * 100)}%, Last hits: top ${Math.round((benchmarks.lastHitsPct) * 100)}%, Hero damage: top ${Math.round((benchmarks.heroDmgPct) * 100)}%`
+    : 'not available'
 
   const langInstruction = lang === 'pt-br'
     ? 'Responda APENAS em portugu\u00eas brasileiro. Use g\u00edrias e humor t\u00edpico de jogadores brasileiros de Dota.'
@@ -193,22 +230,33 @@ export function roastLastMatchPrompt(opts: {
   return `You are a savage but expert Dota 2 analyst and roast comedian. ${langInstruction}
 
 Analyze this player's last match in depth and roast them. Consider ALL of the following:
-- Was the item build appropriate for this hero and role? (e.g. no BKB on a carry who should have it, support items on a carry, etc.)
-- Was their KDA acceptable for their lane role? (supports dying a lot is expected but carries feeding is inexcusable)
-- Is ${gpm} GPM good or bad for a ${laneRole} player? (carries need high GPM, supports don't)
-- Did they buy wards? (${obsPlaced < 0 ? 'ward data not available — match not parsed' : `${obsPlaced} obs, ${senPlaced} sentries`} — if support and 0 wards, roast hard; if data not available, skip ward roast)
-- Did they stack camps? (${campsStacked < 0 ? 'data not available' : `${campsStacked} stacks`} — if pos1/pos2 and 0 stacks, mention it; if data not available, skip)
-- Last hits (${lastHits}) vs denies (${denies}) — relevant for mid/carry
-- ${isTurbo ? 'THIS IS A TURBO MATCH — mock them for playing Turbo if stats are bad, or acknowledge they at least kept it short' : 'This is a normal match'}
-- If the match was genuinely impressive (deathless, huge damage, perfect build), acknowledge it briefly but still find something to tease
-- Reference specific item names from their build when roasting
+- POSITION CONTEXT: This player was ${positionLabel} (detected by net worth ranking). Judge items, farm, and performance FOR THIS ROLE specifically.
+- Was the item build appropriate for ${hero} as ${positionLabel}? (e.g. carries need BKB in most games, supports should have Glimmer/Force, offlaners need utility/aura items)
+- ITEM TIMING: Were their key items purchased at reasonable times? ${itemTimingStr !== 'not available' ? `Their item timings: ${itemTimingStr}. For a ${positionLabel}, judge if these are fast, slow, or average.` : 'Item timing data not available.'}
+- KDA: Was ${kills}/${deaths}/${assists} acceptable for a ${positionLabel}? (pos 5 dying more is normal, pos 1/2 feeding is inexcusable)
+- GPM: Is ${gpm} GPM good for a ${positionLabel}? (pos 1 needs 500+, pos 5 is fine with 200-300)
+- WARDS: ${obsPlaced < 0 ? 'Ward data not available (match not parsed) — skip ward analysis' : `${obsPlaced} obs, ${senPlaced} sentries placed. ${isSupport ? 'As a support, ward placement matters!' : 'Not a support, but buying a few wards is still good.'}`}
+- DEWARDING: ${isParsed ? `Destroyed ${sentryKills} enemy sentries, ${observerKills} enemy observers. ${isSupport && sentryKills === 0 && observerKills === 0 ? 'A support that never dewards is barely a support.' : ''}` : 'Data not available.'}
+- CAMPS STACKED: ${campsStacked < 0 ? 'Data not available' : `${campsStacked} camps stacked. ${isSupport && campsStacked === 0 ? 'Support with 0 stacks is lazy.' : ''}`}
+- DEATHS: ${killedByStr !== 'not available' ? `Killed by: ${killedByStr}. ${nemesis ? `Nemesis: ${nemesis.hero} killed them ${nemesis.count} times — roast the repeated deaths to the same hero!` : ''}` : 'Death breakdown not available.'}
+- BENCHMARKS vs other ${hero} players: ${benchStr}${benchmarks ? ` — if below top 50% in key stats, roast them for being worse than average on their own hero` : ''}
+- TEAMFIGHT: ${teamfightParticipation >= 0 ? `${Math.round(teamfightParticipation * 100)}% teamfight participation. ${teamfightParticipation < 0.3 ? 'Missing most teamfights is unacceptable.' : teamfightParticipation > 0.8 ? 'At least they showed up to fights.' : ''}` : 'Not available.'}
+- LANE: ${laneEfficiency >= 0 ? `${laneEfficiency}% lane efficiency. ${laneEfficiency < 50 && isCore ? 'Terrible laning for a core.' : ''}` : 'Not available.'}
+- TIME DEAD: ${timeSpentDead >= 0 ? `Spent ${timeSpentDead} seconds dead (${Math.round(timeSpentDead / duration * 100)}% of the game). ${timeSpentDead > duration * 0.25 ? 'Spent more time dead than some players spend in the whole match.' : ''}` : 'Not available.'}
+- BUYBACKS: ${buybackCount > 0 ? `Used ${buybackCount} buyback(s). ${buybackCount >= 3 ? 'Desperate buyback spam.' : ''}` : 'No buybacks.'}
+- ${isTurbo ? 'THIS IS A TURBO MATCH — mock them for playing Turbo if stats are bad' : 'This is a normal match'}
+- STUNS: ${stunSeconds >= 0 ? `Applied ${stunSeconds.toFixed(1)}s of stuns. ${isSupport && stunSeconds < 10 ? 'Support barely stunning anyone.' : ''}` : 'Not available.'}
+- COURIER KILLS: ${courierKills > 0 ? `Killed ${courierKills} courier(s) — nice.` : ''}
+- Last hits (${lastHits}) vs denies (${denies}) — critical for mid/carry
+- If the match was genuinely impressive, acknowledge it briefly but still find something to tease
+- Reference SPECIFIC item names and timings from their build when roasting
 
 Write 4-6 punchy roast lines. Be specific, creative, and expert-level. No headers, no bullet points, no markdown. Plain text only.
 
 Player: ${name}
 Hero: ${hero}
-Position: ${laneRole}
-Game mode: ${gameMode}${isTurbo ? ' (TURBO 🤡)' : ''}
+Position: ${positionLabel} (played ${laneRole})
+Game mode: ${gameMode}${isTurbo ? ' (TURBO \ud83e\udd21)' : ''}
 Result: ${won ? 'WIN' : 'LOSS'}
 Duration: ${mins} minutes
 Score: ${kills}/${deaths}/${assists} (KDA ${kda.toFixed(1)})
@@ -218,8 +266,16 @@ Last hits: ${lastHits} | Denies: ${denies}
 Net worth: ${netWorth.toLocaleString()}
 Level at end: ${level}
 Items: ${itemList}
-Wards placed: ${obsPlaced} observer, ${senPlaced} sentry
-Camps stacked: ${campsStacked}
+Item timings: ${itemTimingStr}
+Wards placed: ${obsPlaced >= 0 ? `${obsPlaced} obs, ${senPlaced} sen` : 'N/A'} | Dewarded: ${isParsed ? `${sentryKills} sen, ${observerKills} obs` : 'N/A'}
+Camps stacked: ${campsStacked >= 0 ? campsStacked : 'N/A'}
+Killed by: ${killedByStr}${nemesis ? ` (nemesis: ${nemesis.hero} ${nemesis.count}x)` : ''}
+Benchmarks: ${benchStr}
+Teamfight participation: ${teamfightParticipation >= 0 ? Math.round(teamfightParticipation * 100) + '%' : 'N/A'}
+Lane efficiency: ${laneEfficiency >= 0 ? laneEfficiency + '%' : 'N/A'}
+Time spent dead: ${timeSpentDead >= 0 ? timeSpentDead + 's' : 'N/A'}
+Stun applied: ${stunSeconds >= 0 ? stunSeconds.toFixed(1) + 's' : 'N/A'}
+Buybacks: ${buybackCount}
 Recent ${total} games context: ${winRate}% winrate, avg ${avgDeaths} deaths/game, avg ${avgKDA} KDA, ${streakStr}`
 }
 

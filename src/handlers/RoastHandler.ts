@@ -183,7 +183,7 @@ function roastLastFallbackPtBr(name: string, d: LastMatchFull): string {
     lines.push(`${d.kills}/${d.deaths}/${d.assists} de ${d.hero}. Ok, ${name} absurdamente dominou. Isso s\u00f3 acontece em mirror match de KDA.`)
 
   // Support wards (only roast if data is available, i.e. obsPlaced >= 0)
-  if ((d.laneRoleId === 4 || d.laneRoleId === 5) && d.obsPlaced === 0)
+  if (d.position >= 4 && d.obsPlaced === 0)
     lines.push(`${name} jogou suporte de ${d.hero} e comprou 0 wards. Isso n\u00e3o \u00e9 suporte, \u00e9 carry com menos farm.`)
 
   // Items
@@ -191,7 +191,7 @@ function roastLastFallbackPtBr(name: string, d: LastMatchFull): string {
     lines.push(`Build final: ${itemList}. ${name} foi ao sh\u00f3p de olhos fechados e pediu o pac\u00f3te surpresa.`)
 
   // GPM for carry
-  if ((d.laneRoleId === 1 || d.laneRoleId === 2) && d.gpm < 350)
+  if (d.position >= 1 && d.position <= 2 && d.gpm < 350)
     lines.push(`${d.gpm} GPM de carry. At\u00e9 suporte de trilha comprida manda mais gold do que isso.`)
 
   // Low damage
@@ -225,13 +225,13 @@ function roastLastFallbackEnUs(name: string, d: LastMatchFull): string {
     lines.push(`${d.kills}/${d.deaths}/${d.assists} on ${d.hero}. Fine, ${name} went absolutely nuclear this game. Suspicious.`)
 
   // Support wards (only roast if data is available, i.e. obsPlaced >= 0)
-  if ((d.laneRoleId === 4 || d.laneRoleId === 5) && d.obsPlaced === 0)
+  if (d.position >= 4 && d.obsPlaced === 0)
     lines.push(`${name} played support ${d.hero} and placed 0 observer wards. That's not support\u2014that's a carry with no farm.`)
 
   if (d.items.length > 0)
     lines.push(`Final build: ${itemList}. ${name} clearly shopped with their eyes closed.`)
 
-  if ((d.laneRoleId === 1 || d.laneRoleId === 2) && d.gpm < 350)
+  if (d.position >= 1 && d.position <= 2 && d.gpm < 350)
     lines.push(`${d.gpm} GPM as a core. Even a support with no farm does better economically.`)
 
   if (d.heroDamage < 8000 && d.duration > 1200)
@@ -438,6 +438,8 @@ export class RoastHandler {
       isTurbo: data.isTurbo,
       gameMode: data.gameMode,
       laneRole: data.laneRole,
+      positionLabel: data.positionLabel,
+      position: data.position,
       items: data.items,
       obsPlaced: data.obsPlaced,
       senPlaced: data.senPlaced,
@@ -447,6 +449,20 @@ export class RoastHandler {
       winRate,
       streak: data.agg.currentStreak,
       total: data.agg.total,
+      // Rich parsed data
+      itemTimings: data.itemTimings,
+      killedBy: data.killedBy,
+      nemesis: data.nemesis,
+      benchmarks: data.benchmarks,
+      teamfightParticipation: data.teamfightParticipation,
+      laneEfficiency: data.laneEfficiency,
+      timeSpentDead: data.timeSpentDead,
+      stunSeconds: data.stunSeconds,
+      buybackCount: data.buybackCount,
+      sentryKills: data.sentryKills,
+      observerKills: data.observerKills,
+      courierKills: data.courierKills,
+      isParsed: data.isParsed,
     })
 
     const fallback = LANG === 'pt-br'
@@ -463,6 +479,44 @@ export class RoastHandler {
       ? `${data.agg.currentStreak}x ${t('match.streakWins')}`
       : `${Math.abs(data.agg.currentStreak)}x ${t('match.streakLosses')}`
 
+    // Build item timings display (top 6 key items)
+    const itemTimingDisplay = data.itemTimings.length > 0
+      ? data.itemTimings.slice(0, 6).map(t => {
+          const m = Math.floor(t.time / 60)
+          const s = (t.time % 60).toString().padStart(2, '0')
+          return `${t.item} @ ${m}:${s}`
+        }).join('\n')
+      : ''
+
+    // Build nemesis display
+    const nemesisDisplay = data.nemesis
+      ? `💀 ${data.nemesis.hero} (${data.nemesis.count}x)`
+      : ''
+
+    // Build benchmarks display
+    const benchDisplay = data.benchmarks
+      ? [
+          `GPM: top ${Math.round(data.benchmarks.gpmPct * 100)}%`,
+          `XPM: top ${Math.round(data.benchmarks.xpmPct * 100)}%`,
+          `Kills: top ${Math.round(data.benchmarks.killsPct * 100)}%`,
+          `LH: top ${Math.round(data.benchmarks.lastHitsPct * 100)}%`,
+          `Dmg: top ${Math.round(data.benchmarks.heroDmgPct * 100)}%`,
+        ].join(' | ')
+      : ''
+
+    // Build parsed stats line
+    const parsedStatsLines: string[] = []
+    if (data.teamfightParticipation >= 0)
+      parsedStatsLines.push(`⚔️ TF: ${Math.round(data.teamfightParticipation * 100)}%`)
+    if (data.laneEfficiency >= 0)
+      parsedStatsLines.push(`🏠 Lane: ${data.laneEfficiency}%`)
+    if (data.timeSpentDead >= 0)
+      parsedStatsLines.push(`⏱️ Dead: ${data.timeSpentDead}s`)
+    if (data.stunSeconds >= 0)
+      parsedStatsLines.push(`🔨 Stuns: ${data.stunSeconds.toFixed(1)}s`)
+    if (data.buybackCount > 0)
+      parsedStatsLines.push(`💰 BB: ${data.buybackCount}`)
+
     const embed = new EmbedBuilder()
       .setColor(data.won ? 0xff6a00 : 0xff1a1a)
       .setTitle(t('roastlast.title', { hero: data.hero, result: data.won ? t('match.victory') : t('match.defeat') }))
@@ -471,32 +525,52 @@ export class RoastHandler {
         { name: t('match.fieldKDA'), value: `**${data.kills}/${data.deaths}/${data.assists}** (${data.kda.toFixed(1)})`, inline: true },
         { name: t('match.fieldGPMXPM'), value: `${data.gpm} / ${data.xpm}`, inline: true },
         { name: t('match.fieldMode'), value: `${data.gameMode}`, inline: true },
-        { name: t('roastlast.fieldPosition'), value: data.laneRole, inline: true },
+        { name: t('roastlast.fieldPosition'), value: data.positionLabel, inline: true },
         { name: t('match.fieldLastHits'), value: `${data.lastHits} / ${data.denies}`, inline: true },
         { name: t('match.fieldDuration'), value: `${mins}m ${secs.toString().padStart(2, '0')}s`, inline: true },
         { name: t('match.fieldHeroDmg'), value: data.heroDamage.toLocaleString(), inline: true },
         { name: t('match.fieldTowerDmg'), value: data.towerDamage.toLocaleString(), inline: true },
         { name: t('roastlast.fieldNetWorth'), value: data.netWorth.toLocaleString(), inline: true },
         { name: t('roastlast.fieldItems'), value: itemDisplay, inline: false },
-        {
-          name: t('roastlast.fieldWards'),
-          value: data.obsPlaced < 0
-            ? t('roastlast.wardsNotParsed')
-            : `👁 ${data.obsPlaced} obs  |  🔴 ${data.senPlaced} sen  |  🏕 ${data.campsStacked} stacks`,
-          inline: false,
-        },
-        {
-          name: t('match.fieldTrend', { count: data.agg.total }),
-          value: [
-            t('match.trendWinRate', { wins: data.agg.wins, total: data.agg.total, pct: winRate }),
-            t('match.trendAvgKDA', { kda: data.agg.avgKDA }),
-            t('match.trendAvgDeaths', { avg: data.agg.avgDeaths }),
-            t('match.trendFavHero', { hero: data.agg.favouriteHero, count: data.agg.favouriteHeroCount }),
-            streakLabel,
-          ].join('\n'),
-          inline: false,
-        },
       )
+
+    // Add item timings if available
+    if (itemTimingDisplay)
+      embed.addFields({ name: '🕐 Item Timings', value: itemTimingDisplay, inline: false })
+
+    // Add wards & dewarding
+    embed.addFields({
+      name: t('roastlast.fieldWards'),
+      value: data.obsPlaced < 0
+        ? t('roastlast.wardsNotParsed')
+        : `👁 ${data.obsPlaced} obs  |  🔴 ${data.senPlaced} sen  |  🏕 ${data.campsStacked} stacks${data.isParsed ? `  |  🔍 ${data.sentryKills} sen killed  |  ${data.observerKills} obs killed` : ''}`,
+      inline: false,
+    })
+
+    // Add nemesis if available
+    if (nemesisDisplay)
+      embed.addFields({ name: '☠️ Nemesis', value: nemesisDisplay, inline: true })
+
+    // Add benchmarks if available
+    if (benchDisplay)
+      embed.addFields({ name: '📊 Benchmarks vs other ' + data.hero, value: benchDisplay, inline: false })
+
+    // Add parsed advanced stats
+    if (parsedStatsLines.length > 0)
+      embed.addFields({ name: '📈 Advanced', value: parsedStatsLines.join('  |  '), inline: false })
+
+    // Add trend
+    embed.addFields({
+      name: t('match.fieldTrend', { count: data.agg.total }),
+      value: [
+        t('match.trendWinRate', { wins: data.agg.wins, total: data.agg.total, pct: winRate }),
+        t('match.trendAvgKDA', { kda: data.agg.avgKDA }),
+        t('match.trendAvgDeaths', { avg: data.agg.avgDeaths }),
+        t('match.trendFavHero', { hero: data.agg.favouriteHero, count: data.agg.favouriteHeroCount }),
+        streakLabel,
+      ].join('\n'),
+      inline: false,
+    })
       .setFooter({
         text: t('roastlast.footer', {
           name: targetName,

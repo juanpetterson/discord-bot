@@ -45,6 +45,11 @@ interface AggregateStats {
   totalFeedGames: number         // games with 10+ deaths
 }
 
+export interface ItemTiming {
+  item: string
+  time: number           // seconds into the game
+}
+
 export interface LastMatchFull {
   matchId: number
   hero: string
@@ -67,11 +72,53 @@ export interface LastMatchFull {
   gameMode: string
   laneRole: string
   laneRoleId: number
+  /** Detected Dota position 1-5 based on net worth ranking within team */
+  position: number
+  positionLabel: string
   items: string[]
   obsPlaced: number
   senPlaced: number
   campsStacked: number
   startTime: number
+  // ── Rich parsed data ──
+  /** Key item purchase timings (completed items only, sorted by time) */
+  itemTimings: ItemTiming[]
+  /** Map of hero name → times that hero killed this player */
+  killedBy: Record<string, number>
+  /** Most killed by: { hero, count } */
+  nemesis: { hero: string; count: number } | null
+  /** Benchmarks percentile (0-1) vs other players of same hero */
+  benchmarks: {
+    gpmPct: number
+    xpmPct: number
+    killsPct: number
+    lastHitsPct: number
+    heroDmgPct: number
+    healingPct: number
+    towerDmgPct: number
+  } | null
+  /** Teamfight participation 0-1 */
+  teamfightParticipation: number
+  /** Lane efficiency percentage (0-100) */
+  laneEfficiency: number
+  /** Total seconds spent dead */
+  timeSpentDead: number
+  /** Stuns applied in seconds */
+  stunSeconds: number
+  /** Buyback count */
+  buybackCount: number
+  /** Actions per minute */
+  apm: number
+  /** Sentry wards dewarded */
+  sentryKills: number
+  /** Observer wards dewarded */
+  observerKills: number
+  /** Courier kills */
+  courierKills: number
+  /** Rune pickups */
+  runePickups: number
+  /** Whether the match was parsed (full data available) */
+  isParsed: boolean
   agg: AggregateStats
 }
 
@@ -107,16 +154,145 @@ function itemName(id: number): string {
   return itemMap[id] || `Item #${id}`
 }
 
-const LANE_ROLES: Record<number, string> = {
-  1: 'Safe Lane (Position 1/2)',
-  2: 'Mid Lane (Position 2)',
-  3: 'Off Lane (Position 3)',
+const LANE_NAMES: Record<number, string> = {
+  1: 'Safe Lane',
+  2: 'Mid Lane',
+  3: 'Off Lane',
+}
+
+const POSITION_LABELS: Record<number, string> = {
+  1: 'Hard Carry (Position 1)',
+  2: 'Mid (Position 2)',
+  3: 'Offlaner (Position 3)',
   4: 'Soft Support (Position 4)',
   5: 'Hard Support (Position 5)',
 }
 
+function positionLabel(pos: number): string {
+  return POSITION_LABELS[pos] || 'Unknown Position'
+}
+
 function laneRoleName(role: number): string {
-  return LANE_ROLES[role] || 'Unknown Position'
+  return LANE_NAMES[role] || 'Unknown Lane'
+}
+
+/**
+ * Detect the actual Dota position (1-5) by ranking net worth within the team.
+ * Position 1 = highest NW core, Position 5 = lowest NW support.
+ * Falls back to lane_role if team data is unavailable.
+ */
+function detectPosition(fullMatch: any, fullPlayer: any, playerSlot: number): number {
+  if (!fullMatch?.players || !fullPlayer) return fullPlayer?.lane_role ?? 0
+
+  const isRadiant = playerSlot < 128
+  const teammates = fullMatch.players
+    .filter((p: any) => (p.player_slot < 128) === isRadiant)
+    .sort((a: any, b: any) => (b.net_worth ?? b.gold_per_min ?? 0) - (a.net_worth ?? a.gold_per_min ?? 0))
+
+  const idx = teammates.findIndex((p: any) => p.player_slot === playerSlot)
+  if (idx < 0) return fullPlayer?.lane_role ?? 0
+  return idx + 1  // 1-indexed: pos 1 (highest NW) to pos 5 (lowest NW)
+}
+
+// Item keys to ignore when building item timings (consumables, components, etc.)
+const IGNORED_ITEM_KEYS = new Set([
+  'tango', 'flask', 'clarity', 'faerie_fire', 'branches', 'tpscroll',
+  'ward_observer', 'ward_sentry', 'ward_dispenser', 'smoke_of_deceit',
+  'dust', 'enchanted_mango', 'blood_grenade', 'gauntlets', 'slippers',
+  'mantle', 'circlet', 'ring_of_protection', 'quelling_blade', 'stout_shield',
+  'orb_of_venom', 'blight_stone', 'wind_lace', 'ring_of_regen',
+  'sobi_mask', 'gloves', 'boots', 'blades_of_attack', 'chainmail',
+  'robe', 'belt_of_strength', 'ogre_axe', 'staff_of_wizardry', 'blade_of_alacrity',
+  'broadsword', 'claymore', 'javelin', 'mithril_hammer', 'cloak',
+  'helm_of_iron_will', 'ring_of_health', 'void_stone', 'mystic_staff',
+  'energy_booster', 'vitality_booster', 'point_booster', 'platemail',
+  'hyperstone', 'ultimate_orb', 'demon_edge', 'eaglesong', 'reaver', 'sacred_relic',
+  'recipe_magic_wand', 'recipe_urn_of_shadows', 'recipe_mekansm',
+  'famango', 'mana_draught', 'madstone_bundle', 'blitz_knuckles',
+  // skip any 'recipe_*'
+])
+
+function isCompletedItem(key: string): boolean {
+  if (key.startsWith('recipe_')) return false
+  if (IGNORED_ITEM_KEYS.has(key)) return false
+  return true
+}
+
+function extractItemTimings(fullPlayer: any): ItemTiming[] {
+  const timings: ItemTiming[] = []
+
+  // Use purchase_log if available (array of {time, key})
+  const purchaseLog = fullPlayer?.purchase_log
+  if (Array.isArray(purchaseLog)) {
+    const seen = new Set<string>()
+    for (const entry of purchaseLog) {
+      const key = entry.key as string
+      if (!key || !isCompletedItem(key)) continue
+      if (seen.has(key)) continue
+      seen.add(key)
+      const dname = itemMap[Object.values(itemMap).indexOf(key) >= 0 ? 0 : 0] // we'll use key directly
+      // Convert internal key to display name from first_purchase_time or just capitalise
+      timings.push({ item: formatItemKey(key), time: entry.time as number })
+    }
+  } else {
+    // Fallback: use first_purchase_time object
+    const fpt = fullPlayer?.first_purchase_time
+    if (fpt && typeof fpt === 'object') {
+      for (const [key, time] of Object.entries(fpt)) {
+        if (!isCompletedItem(key)) continue
+        timings.push({ item: formatItemKey(key), time: time as number })
+      }
+      timings.sort((a, b) => a.time - b.time)
+    }
+  }
+  return timings
+}
+
+function formatItemKey(key: string): string {
+  // Try to find display name from itemMap
+  for (const [, v] of Object.entries(itemMap)) {
+    // itemMap is id→dname, but we need key→dname. Search by matching.
+  }
+  // Fallback: capitalise words and replace underscores
+  return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+function extractKilledBy(fullPlayer: any): Record<string, number> {
+  const raw = fullPlayer?.killed_by
+  if (!raw || typeof raw !== 'object') return {}
+  const result: Record<string, number> = {}
+  for (const [key, count] of Object.entries(raw)) {
+    // Convert internal key like npc_dota_hero_storm_spirit → hero name
+    const heroKey = key.replace('npc_dota_hero_', '')
+    const heroId = Object.entries(heroMap).find(([, name]) =>
+      name.toLowerCase().replace(/[\s']/g, '_') === heroKey ||
+      name.toLowerCase().replace(/[^a-z]/g, '') === heroKey.replace(/_/g, '')
+    )
+    const displayName = heroId ? heroMap[Number(heroId[0])] : formatItemKey(heroKey)
+    result[displayName] = count as number
+  }
+  return result
+}
+
+function extractBenchmarks(fullPlayer: any): LastMatchFull['benchmarks'] {
+  const b = fullPlayer?.benchmarks
+  if (!b) return null
+  return {
+    gpmPct: b.gold_per_min?.pct ?? -1,
+    xpmPct: b.xp_per_min?.pct ?? -1,
+    killsPct: b.kills_per_min?.pct ?? -1,
+    lastHitsPct: b.last_hits_per_min?.pct ?? -1,
+    heroDmgPct: b.hero_damage_per_min?.pct ?? -1,
+    healingPct: b.hero_healing_per_min?.pct ?? -1,
+    towerDmgPct: b.tower_damage?.pct ?? -1,
+  }
+}
+
+function formatTimestamp(seconds: number): string {
+  if (seconds < 0) return '-' + formatTimestamp(-seconds)
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 function httpsGet(url: string): Promise<any> {
@@ -665,6 +841,24 @@ export class MatchHandler {
       const senPlaced  = isParsed ? (fullPlayer?.sen_placed   ?? 0) : -1
       const campsStacked = isParsed ? (fullPlayer?.camps_stacked ?? 0) : -1
 
+      // Detect actual Dota position (1-5) by team net worth ranking
+      const position = isParsed
+        ? detectPosition(fullMatch, fullPlayer, m.player_slot)
+        : (fullPlayer?.lane_role ?? 0)
+
+      // Extract rich parsed data
+      const itemTimings = isParsed ? extractItemTimings(fullPlayer) : []
+      const killedBy = isParsed ? extractKilledBy(fullPlayer) : {}
+      const benchmarks = extractBenchmarks(fullPlayer)
+
+      // Nemesis: who killed this player the most
+      let nemesis: LastMatchFull['nemesis'] = null
+      const killedByEntries = Object.entries(killedBy)
+      if (killedByEntries.length > 0) {
+        const [nemHero, nemCount] = killedByEntries.sort((a, b) => b[1] - a[1])[0]
+        nemesis = { hero: nemHero, count: nemCount }
+      }
+
       return {
         matchId: m.match_id,
         hero,
@@ -687,11 +881,29 @@ export class MatchHandler {
         gameMode: GAME_MODES[m.game_mode] ?? 'Unknown',
         laneRole: laneRoleName(fullPlayer?.lane_role ?? 0),
         laneRoleId: fullPlayer?.lane_role ?? 0,
+        position,
+        positionLabel: positionLabel(position),
         items: rawItems,
         obsPlaced,
         senPlaced,
         campsStacked,
         startTime: m.start_time,
+        // Rich parsed data
+        itemTimings,
+        killedBy,
+        nemesis,
+        benchmarks,
+        teamfightParticipation: isParsed ? (fullPlayer?.teamfight_participation ?? 0) : -1,
+        laneEfficiency: isParsed ? (fullPlayer?.lane_efficiency_pct ?? 0) : -1,
+        timeSpentDead: isParsed ? (fullPlayer?.life_state_dead ?? 0) : -1,
+        stunSeconds: isParsed ? (fullPlayer?.stuns ?? 0) : -1,
+        buybackCount: fullPlayer?.buyback_count ?? 0,
+        apm: isParsed ? (fullPlayer?.actions_per_min ?? 0) : -1,
+        sentryKills: isParsed ? (fullPlayer?.sentry_kills ?? 0) : -1,
+        observerKills: isParsed ? (fullPlayer?.observer_kills ?? 0) : -1,
+        courierKills: isParsed ? (fullPlayer?.courier_kills ?? 0) : -1,
+        runePickups: isParsed ? (fullPlayer?.rune_pickups ?? 0) : -1,
+        isParsed,
         agg,
       }
     } catch {
