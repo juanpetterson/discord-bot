@@ -95,7 +95,7 @@ Respond with ONLY valid JSON, no explanation, no markdown:
 {"teamA":["Hero1","Hero2"...],"teamB":["Hero1","Hero2"...]}`
 }
 
-/** Prompt for match commentary (2-3 sentences, witty) */
+/** Prompt for match commentary (2-3 sentences, witty) — includes rich parsed data */
 export function matchCommentaryPrompt(opts: {
   lang: 'pt-br' | 'en-us'
   name: string
@@ -106,33 +106,109 @@ export function matchCommentaryPrompt(opts: {
   kda: number
   won: boolean
   gpm: number
+  xpm: number
   heroDamage: number
+  towerDamage: number
+  lastHits: number
+  denies: number
+  netWorth: number
+  level: number
+  duration: number
+  isTurbo: boolean
+  gameMode: string
+  positionLabel: string
+  position: number
+  items: string[]
   winRate: number
   avgDeaths: number
   avgKDA: number
   favHero: string
   streak: number
   total: number
+  // Rich parsed data
+  obsPlaced: number
+  senPlaced: number
+  campsStacked: number
+  itemTimings: { item: string; time: number }[]
+  killedBy: Record<string, number>
+  nemesis: { hero: string; count: number } | null
+  benchmarks: {
+    gpmPct: number; xpmPct: number; killsPct: number
+    lastHitsPct: number; heroDmgPct: number; towerDmgPct: number
+  } | null
+  teamfightParticipation: number
+  laneEfficiency: number
+  timeSpentDead: number
+  stunSeconds: number
+  buybackCount: number
+  sentryKills: number
+  observerKills: number
+  isParsed: boolean
 }): string {
-  const { lang, name, hero, kills, deaths, assists, kda, won, gpm, heroDamage,
-    winRate, avgDeaths, avgKDA, favHero, streak, total } = opts
+  const { lang, name, hero, kills, deaths, assists, kda, won, gpm, xpm, heroDamage,
+    towerDamage, lastHits, denies, netWorth, level, duration, isTurbo, gameMode,
+    positionLabel, position, items,
+    winRate, avgDeaths, avgKDA, favHero, streak, total,
+    obsPlaced, senPlaced, campsStacked, itemTimings, killedBy, nemesis, benchmarks,
+    teamfightParticipation, laneEfficiency, timeSpentDead, stunSeconds,
+    buybackCount, sentryKills, observerKills, isParsed } = opts
 
+  const mins = Math.floor(duration / 60)
+  const itemList = items.length > 0 ? items.join(', ') : 'no items recorded'
   const streakStr = streak > 0
     ? `${streak}-win streak`
     : streak < 0
     ? `${Math.abs(streak)}-loss streak`
     : 'no current streak'
 
+  const isSupport = position >= 4
+  const isCore = position >= 1 && position <= 3
+
+  // Item timings
+  const itemTimingStr = itemTimings.length > 0
+    ? itemTimings.slice(0, 6).map(t => `${t.item} at ${Math.floor(t.time / 60)}:${(t.time % 60).toString().padStart(2, '0')}`).join(', ')
+    : 'not available'
+
+  // Killed-by breakdown
+  const killedByStr = Object.keys(killedBy).length > 0
+    ? Object.entries(killedBy).sort((a, b) => b[1] - a[1]).map(([h, c]) => `${h} (${c}x)`).join(', ')
+    : 'not available'
+
+  // Benchmarks
+  const benchStr = benchmarks
+    ? `GPM: top ${Math.round(benchmarks.gpmPct * 100)}%, XPM: top ${Math.round(benchmarks.xpmPct * 100)}%, Kills: top ${Math.round(benchmarks.killsPct * 100)}%, LH: top ${Math.round(benchmarks.lastHitsPct * 100)}%, Dmg: top ${Math.round(benchmarks.heroDmgPct * 100)}%`
+    : 'not available'
+
   const langInstruction = lang === 'pt-br'
     ? 'Responda APENAS em portugu\u00eas brasileiro. Use g\u00edrias de jogador de Dota brasileiro.'
     : 'Respond ONLY in English. Use gamer slang.'
 
-  return `You are a sharp, witty Dota 2 commentator. ${langInstruction}
+  return `You are a sharp, witty Dota 2 commentator and analyst. ${langInstruction}
 
-Write 2-3 sentences of punchy commentary about this player's last match. Be specific to the numbers. Can be funny, impressed, or mocking \u2014 match the mood to the stats. No headers, no labels, no markdown, just plain text.
+Write 2-4 sentences of punchy, insightful commentary about this player's last match. Be specific to the numbers. Can be funny, impressed, analytical, or mocking — match the mood to the performance. Reference specific data points like item timings, nemesis, benchmarks when available. No headers, no labels, no markdown, just plain text.
+
+Analysis context:
+- POSITION: ${positionLabel}. Judge everything relative to this role.
+- ITEM BUILD: ${itemList}${itemTimingStr !== 'not available' ? `. Key timings: ${itemTimingStr}` : ''}
+- WARDS: ${obsPlaced < 0 ? 'not parsed' : `${obsPlaced} obs, ${senPlaced} sen placed`}${isParsed ? `, dewarded: ${sentryKills} sen, ${observerKills} obs` : ''}
+- CAMPS STACKED: ${campsStacked < 0 ? 'not parsed' : campsStacked}
+- DEATHS: ${killedByStr !== 'not available' ? `Killed by: ${killedByStr}` : ''}${nemesis ? ` — nemesis: ${nemesis.hero} killed them ${nemesis.count} times` : ''}
+- BENCHMARKS vs other ${hero} players: ${benchStr}
+- TEAMFIGHT: ${teamfightParticipation >= 0 ? `${Math.round(teamfightParticipation * 100)}% participation` : 'N/A'}
+- LANE: ${laneEfficiency >= 0 ? `${laneEfficiency}% efficiency` : 'N/A'}
+- TIME DEAD: ${timeSpentDead >= 0 ? `${timeSpentDead}s (${Math.round(timeSpentDead / duration * 100)}% of game)` : 'N/A'}
+- STUNS: ${stunSeconds >= 0 ? `${stunSeconds.toFixed(1)}s applied` : 'N/A'}
+- BUYBACKS: ${buybackCount}
+- ${isTurbo ? 'TURBO match' : 'Normal match'}
 
 Player: ${name}
-Last match: ${hero}, ${kills}/${deaths}/${assists} (${kda.toFixed(1)} KDA), ${won ? 'WIN' : 'LOSS'}, ${gpm} GPM, ${heroDamage.toLocaleString()} hero damage
+Hero: ${hero} (${positionLabel})
+Game mode: ${gameMode}${isTurbo ? ' (TURBO)' : ''}
+Result: ${won ? 'WIN' : 'LOSS'} in ${mins} minutes
+Score: ${kills}/${deaths}/${assists} (${kda.toFixed(1)} KDA)
+GPM: ${gpm} | XPM: ${xpm} | Net worth: ${netWorth.toLocaleString()}
+Hero damage: ${heroDamage.toLocaleString()} | Tower damage: ${towerDamage.toLocaleString()}
+Last hits: ${lastHits} | Denies: ${denies} | Level: ${level}
 Recent ${total} games: ${winRate}% winrate, avg ${avgDeaths} deaths/game, avg ${avgKDA} KDA, favourite hero ${favHero}, ${streakStr}`
 }
 

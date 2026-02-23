@@ -700,19 +700,65 @@ export class MatchHandler {
       const agg = computeAggregate(matches)
       const m = matches[0]
 
-      // Fetch full match details in parallel to get denies + level (not in recentMatches)
-      const fullMatch = await httpsGet(`${OPENDOTA_API}/matches/${m.match_id}`)
+      // Fetch full match details with parsing for rich data
+      await loadItemMap()
+      const fullMatch = await fetchMatchWithParsing(m.match_id)
       const fullPlayer = fullMatch?.players?.find(
         (p: any) => p.account_id === Number(accountId)
       )
+      const isParsed = !!fullMatch?.version
+
       const denies: number = fullPlayer?.denies ?? 0
       const level: number  = fullPlayer?.level  ?? 0
+      const netWorth: number = fullPlayer?.net_worth ?? 0
 
       const isRadiant = m.player_slot < 128
       const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
       const hero = heroName(m.hero_id)
       const kda = m.deaths === 0 ? m.kills + m.assists : (m.kills + m.assists) / m.deaths
       const playerName = await fetchDotaNick(accountId, displayName ?? `Steam ${accountId}`)
+
+      // Collect items (slots 0-5)
+      const rawItems: string[] = []
+      if (fullPlayer) {
+        for (let i = 0; i <= 5; i++) {
+          const id = fullPlayer[`item_${i}`] as number
+          const name = itemName(id)
+          if (name) rawItems.push(name)
+        }
+      }
+      const itemList = rawItems.length > 0 ? rawItems.join(', ') : ''
+
+      // Detect position, extract parsed data
+      const position = isParsed
+        ? detectPosition(fullMatch, fullPlayer, m.player_slot)
+        : (fullPlayer?.lane_role ?? 0)
+      const posLabel = positionLabel(position)
+
+      const obsPlaced   = isParsed ? (fullPlayer?.obs_placed    ?? 0) : -1
+      const senPlaced   = isParsed ? (fullPlayer?.sen_placed    ?? 0) : -1
+      const campsStacked = isParsed ? (fullPlayer?.camps_stacked ?? 0) : -1
+
+      const itemTimings = isParsed ? extractItemTimings(fullPlayer) : []
+      const killedByMap = isParsed ? extractKilledBy(fullPlayer) : {}
+      const benchmarks = extractBenchmarks(fullPlayer)
+
+      let nemesis: { hero: string; count: number } | null = null
+      const kbEntries = Object.entries(killedByMap)
+      if (kbEntries.length > 0) {
+        const [nemHero, nemCount] = kbEntries.sort((a, b) => b[1] - a[1])[0]
+        nemesis = { hero: nemHero, count: nemCount }
+      }
+
+      const teamfightParticipation = isParsed ? (fullPlayer?.teamfight_participation ?? 0) : -1
+      const laneEfficiency = isParsed ? (fullPlayer?.lane_efficiency_pct ?? 0) : -1
+      const timeSpentDead = isParsed ? (fullPlayer?.life_state_dead ?? 0) : -1
+      const stunSeconds = isParsed ? (fullPlayer?.stuns ?? 0) : -1
+      const buybackCount = fullPlayer?.buyback_count ?? 0
+      const sentryKills = isParsed ? (fullPlayer?.sentry_kills ?? 0) : -1
+      const observerKills = isParsed ? (fullPlayer?.observer_kills ?? 0) : -1
+
+      const winRate = Math.round(agg.wins / agg.total * 100)
 
       const fallbackCtx = {
         name: playerName, hero,
@@ -726,13 +772,40 @@ export class MatchHandler {
         kills: m.kills, deaths: m.deaths, assists: m.assists,
         kda, won,
         gpm: m.gold_per_min,
+        xpm: m.xp_per_min,
         heroDamage: m.hero_damage ?? 0,
-        winRate: Math.round(agg.wins / agg.total * 100),
+        towerDamage: m.tower_damage ?? 0,
+        lastHits: fullPlayer?.last_hits ?? m.last_hits ?? 0,
+        denies,
+        netWorth,
+        level,
+        duration: m.duration,
+        isTurbo: m.game_mode === 23,
+        gameMode: GAME_MODES[m.game_mode] ?? 'Unknown',
+        positionLabel: posLabel,
+        position,
+        items: rawItems,
+        winRate,
         avgDeaths: agg.avgDeaths,
         avgKDA: agg.avgKDA,
         favHero: agg.favouriteHero,
         streak: agg.currentStreak,
         total: agg.total,
+        obsPlaced,
+        senPlaced,
+        campsStacked,
+        itemTimings,
+        killedBy: killedByMap,
+        nemesis,
+        benchmarks,
+        teamfightParticipation,
+        laneEfficiency,
+        timeSpentDead,
+        stunSeconds,
+        buybackCount,
+        sentryKills,
+        observerKills,
+        isParsed,
       })
       const commentary = (await askAI(aiCommentaryPrompt)) ?? getCommentary(fallbackCtx)
 
@@ -756,14 +829,72 @@ export class MatchHandler {
           { name: t('match.fieldKDA'), value: `**${m.kills}/${m.deaths}/${m.assists}** (${kda.toFixed(1)})`, inline: true },
           { name: t('match.fieldGPMXPM'), value: `${m.gold_per_min} / ${m.xp_per_min}`, inline: true },
           { name: t('match.fieldDuration'), value: formatDuration(m.duration), inline: true },
-          { name: t('match.fieldLastHits'), value: `${m.last_hits ?? 0} / ${denies}`, inline: true },
+          { name: '📌 Position', value: posLabel, inline: true },
+          { name: t('match.fieldLastHits'), value: `${fullPlayer?.last_hits ?? m.last_hits ?? 0} / ${denies}`, inline: true },
+          { name: '💸 Net Worth', value: netWorth.toLocaleString(), inline: true },
           { name: t('match.fieldHeroDmg'), value: (m.hero_damage ?? 0).toLocaleString(), inline: true },
           { name: t('match.fieldTowerDmg'), value: (m.tower_damage ?? 0).toLocaleString(), inline: true },
           { name: t('match.fieldHealing'), value: (m.hero_healing ?? 0).toLocaleString(), inline: true },
           { name: t('match.fieldLevel'), value: `${level || '-'}`, inline: true },
           { name: t('match.fieldMode'), value: GAME_MODES[m.game_mode] ?? 'Unknown', inline: true },
-          { name: t('match.fieldTrend', { count: agg.total }), value: trendLines, inline: false },
         )
+
+      // Items
+      if (itemList)
+        embed.addFields({ name: '🛡️ Items', value: itemList, inline: false })
+
+      // Item timings (top 6)
+      if (itemTimings.length > 0) {
+        const timingDisplay = itemTimings.slice(0, 6).map(t => {
+          const tm = Math.floor(t.time / 60)
+          const ts = (t.time % 60).toString().padStart(2, '0')
+          return `${t.item} @ ${tm}:${ts}`
+        }).join('\n')
+        embed.addFields({ name: '🕐 Item Timings', value: timingDisplay, inline: false })
+      }
+
+      // Wards & dewarding
+      if (obsPlaced >= 0) {
+        const wardLine = `👁 ${obsPlaced} obs  |  🔴 ${senPlaced} sen  |  🏕 ${campsStacked} stacks`
+          + (isParsed ? `  |  🔍 ${sentryKills} sen killed  |  ${observerKills} obs killed` : '')
+        embed.addFields({ name: '👁️ Wards / Stacks', value: wardLine, inline: false })
+      }
+
+      // Nemesis
+      if (nemesis)
+        embed.addFields({ name: '☠️ Nemesis', value: `💀 ${nemesis.hero} (${nemesis.count}x)`, inline: true })
+
+      // Benchmarks
+      if (benchmarks) {
+        const benchDisplay = [
+          `GPM: top ${Math.round(benchmarks.gpmPct * 100)}%`,
+          `XPM: top ${Math.round(benchmarks.xpmPct * 100)}%`,
+          `Kills: top ${Math.round(benchmarks.killsPct * 100)}%`,
+          `LH: top ${Math.round(benchmarks.lastHitsPct * 100)}%`,
+          `Dmg: top ${Math.round(benchmarks.heroDmgPct * 100)}%`,
+        ].join(' | ')
+        embed.addFields({ name: '📊 Benchmarks vs other ' + hero, value: benchDisplay, inline: false })
+      }
+
+      // Advanced parsed stats
+      const advancedLines: string[] = []
+      if (teamfightParticipation >= 0)
+        advancedLines.push(`⚔️ TF: ${Math.round(teamfightParticipation * 100)}%`)
+      if (laneEfficiency >= 0)
+        advancedLines.push(`🏠 Lane: ${laneEfficiency}%`)
+      if (timeSpentDead >= 0)
+        advancedLines.push(`⏱️ Dead: ${timeSpentDead}s`)
+      if (stunSeconds >= 0)
+        advancedLines.push(`🔨 Stuns: ${stunSeconds.toFixed(1)}s`)
+      if (buybackCount > 0)
+        advancedLines.push(`💰 BB: ${buybackCount}`)
+      if (advancedLines.length > 0)
+        embed.addFields({ name: '📈 Advanced', value: advancedLines.join('  |  '), inline: false })
+
+      // Trend
+      embed.addFields(
+        { name: t('match.fieldTrend', { count: agg.total }), value: trendLines, inline: false },
+      )
         .setFooter({
           text: t('match.footerText', {
             name: playerName,
