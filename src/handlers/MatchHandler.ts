@@ -910,6 +910,107 @@ export class MatchHandler {
     }
   }
 
+  /**
+   * !resumedoday / !resumedolastday
+   * Fetches recent matches for ALL mapped users, filters by the target day,
+   * and posts a summary of wins/losses per player.
+   */
+  static async daySummary(message: Message, mode: 'today' | 'yesterday') {
+    try {
+      await (message.channel as any).sendTyping?.()
+      await loadHeroMap()
+
+      const dayLabel = mode === 'today' ? t('resume.today') : t('resume.yesterday')
+      message.channel.send(t('resume.fetching'))
+
+      // Determine the target day boundaries (in local time / UTC)
+      const now = new Date()
+      const targetDate = new Date(now)
+      if (mode === 'yesterday') {
+        targetDate.setDate(targetDate.getDate() - 1)
+      }
+      const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0)
+      const dayEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59)
+      const dayStartUnix = Math.floor(dayStart.getTime() / 1000)
+      const dayEndUnix = Math.floor(dayEnd.getTime() / 1000)
+
+      interface PlayerResult {
+        name: string
+        wins: number
+        losses: number
+        total: number
+      }
+
+      const results: PlayerResult[] = []
+
+      // Fetch matches for each mapped user
+      for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
+        try {
+          const playerName = await fetchDotaNick(steamId, discordName)
+          const recent: RecentMatch[] = await httpsGet(
+            `${OPENDOTA_API}/players/${steamId}/recentMatches`
+          )
+          if (!recent || !Array.isArray(recent) || recent.length === 0) continue
+
+          // Filter matches that started within the target day
+          const dayMatches = recent.filter(m => {
+            return m.start_time >= dayStartUnix && m.start_time <= dayEndUnix
+          })
+
+          if (dayMatches.length === 0) continue
+
+          let wins = 0
+          let losses = 0
+          for (const m of dayMatches) {
+            const isRadiant = m.player_slot < 128
+            const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
+            if (won) wins++
+            else losses++
+          }
+
+          results.push({ name: playerName, wins, losses, total: dayMatches.length })
+        } catch (err) {
+          console.warn(`[DaySummary] Failed to fetch for ${discordName}:`, err)
+        }
+      }
+
+      if (results.length === 0) {
+        message.channel.send(t('resume.noMatches', { day: dayLabel }))
+        return
+      }
+
+      // Sort by total matches descending, then by wins descending
+      results.sort((a, b) => b.total - a.total || b.wins - a.wins)
+
+      const totalWins = results.reduce((s, r) => s + r.wins, 0)
+      const totalLosses = results.reduce((s, r) => s + r.losses, 0)
+      const totalMatches = results.reduce((s, r) => s + r.total, 0)
+
+      const lines = results.map(r => {
+        const winRate = r.total > 0 ? Math.round((r.wins / r.total) * 100) : 0
+        let icon = '⚪'
+        if (r.wins > r.losses) icon = '🟢'
+        else if (r.losses > r.wins) icon = '🔴'
+        else if (r.total > 0) icon = '🟡'
+        return t('resume.playerLine', { icon, name: r.name, wins: r.wins, losses: r.losses, total: r.total })
+      })
+
+      const totalLine = t('resume.totalLine', { wins: totalWins, losses: totalLosses, total: totalMatches })
+
+      const embed = new EmbedBuilder()
+        .setColor(totalWins >= totalLosses ? 0x57f287 : 0xed4245)
+        .setTitle(t('resume.title', { day: dayLabel }))
+        .setDescription(lines.join('\n') + '\n\n' + totalLine)
+        .setFooter({ text: t('resume.footer') })
+        .setTimestamp()
+
+      message.channel.send({ embeds: [embed] })
+    } catch (err: any) {
+      console.error('[DaySummary] Error:', err?.message ?? err)
+      message.reply(t('match.error'))
+    }
+  }
+
   /** Exported for RoastHandler: returns aggregate stats for a steam accountId */
   static async fetchAggregate(accountId: string, count = RECENT_MATCH_COUNT): Promise<AggregateStats | null> {
     try {

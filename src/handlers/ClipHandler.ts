@@ -2,7 +2,14 @@ import {
   type VoiceConnection,
   EndBehaviorType,
 } from '@discordjs/voice';
-import type { Message, Guild } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  type ButtonInteraction,
+  type Guild,
+  type Message,
+} from 'discord.js';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -37,6 +44,8 @@ interface UserAudioBuffer {
 }
 
 export class ClipHandler {
+  static readonly BUTTON_CUSTOM_ID = 'clip_execute';
+
   private static userBuffers: Map<string, UserAudioBuffer> = new Map();
   private static activeSubscriptions: Map<string, SpeakingSession> = new Map(); // userId -> current session
   private static isRecording = false;
@@ -207,7 +216,7 @@ export class ClipHandler {
   /**
    * Handle the !clip command.
    */
-  static async handleClip(message: Message) {
+  static async handleClip(message: Pick<Message, 'reply' | 'channel'>) {
     if (!ClipHandler.isRecording) {
       message.reply('⚠️ Not currently recording. The bot needs to be in a voice channel.');
       return;
@@ -325,6 +334,12 @@ export class ClipHandler {
 
       const userList = userPcmFiles.map(u => u.displayName).join(', ');
       const filesToSend = [mixedMp3Path, zipPath];
+      const clipButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(ClipHandler.BUTTON_CUSTOM_ID)
+          .setLabel('CLIP')
+          .setStyle(ButtonStyle.Primary)
+      );
 
       const totalSize = filesToSend.reduce((sum, f) => sum + fs.statSync(f).size, 0);
       const maxSize = 25 * 1024 * 1024;
@@ -339,6 +354,7 @@ export class ClipHandler {
       await message.channel.send({
         content: `🎙️ **Voice Clip** (last 60 seconds)\n👥 **Recorded:** ${userList}\n📁 Mixed MP3 + ZIP with individual tracks`,
         files: filesToSend,
+        components: [clipButtonRow],
       });
 
       await statusMsg.delete().catch(() => {});
@@ -347,6 +363,26 @@ export class ClipHandler {
       console.error('ClipHandler: Error processing clip:', err);
       await statusMsg.edit('❌ An error occurred while processing the clip. Check console for details.').catch(() => {});
     }
+  }
+
+  static isClipButton(customId: string): boolean {
+    return customId === ClipHandler.BUTTON_CUSTOM_ID;
+  }
+
+  static async handleClipButton(interaction: ButtonInteraction) {
+    if (!interaction.channel) {
+      await interaction.reply({ content: '⚠️ Could not determine channel for this clip.', ephemeral: true }).catch(() => {});
+      return;
+    }
+
+    await interaction.deferUpdate().catch(() => {});
+
+    const context = {
+      reply: (options: Parameters<Message['reply']>[0]) => interaction.channel!.send(options as any),
+      channel: interaction.channel,
+    } as Pick<Message, 'reply' | 'channel'>;
+
+    await ClipHandler.handleClip(context);
   }
 
   /**

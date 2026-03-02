@@ -40,6 +40,16 @@ const translations = {
     'match.footerText': '{name} \u2022 {date} \u2022 Match {id}',
     'match.usage': 'Uso: `!lastmatch @user` ou `!lastmatch <nick>`',
 
+    // \u2500\u2500 Resume do Dia \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    'resume.fetching': '\ud83d\udd0d Buscando partidas de todos os jogadores mapeados...',
+    'resume.title': '\ud83d\udcca Resumo do {day}',
+    'resume.today': 'Dia',
+    'resume.yesterday': 'Dia Anterior',
+    'resume.noMatches': '\ud83d\ude34 Nenhuma partida encontrada para {day}.',
+    'resume.playerLine': '{icon} **{name}** \u2014 {wins}V / {losses}D ({total} partidas)',
+    'resume.footer': 'Dados das \u00faltimas partidas de cada jogador via OpenDota',
+    'resume.totalLine': '\ud83d\udcc8 **Total:** {wins}V / {losses}D ({total} partidas)',
+
     // \u2500\u2500 Roast \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'roast.usage': 'Uso: `!roast @user` \u2014 marque algu\u00e9m pra tomar roast!',
     'roast.noSteam': 'N\u00e3o tem Steam ID cadastrado pra {name}. Roast gen\u00e9rico ativado \ud83d\udd25',
@@ -221,6 +231,16 @@ const translations = {
     'match.streakLosses': 'loss',
     'match.footerText': '{name} \u2022 {date} \u2022 Match {id}',
     'match.usage': 'Usage: `!lastmatch @user` or `!lastmatch <nick>`',
+
+    // \u2500\u2500 Day Resume \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    'resume.fetching': '\ud83d\udd0d Fetching matches for all mapped players...',
+    'resume.title': '\ud83d\udcca {day} Summary',
+    'resume.today': 'Today',
+    'resume.yesterday': 'Yesterday',
+    'resume.noMatches': '\ud83d\ude34 No matches found for {day}.',
+    'resume.playerLine': '{icon} **{name}** \u2014 {wins}W / {losses}L ({total} matches)',
+    'resume.footer': 'Recent match data for each player via OpenDota',
+    'resume.totalLine': '\ud83d\udcc8 **Total:** {wins}W / {losses}L ({total} matches)',
 
     // \u2500\u2500 Roast \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'roast.usage': 'Usage: `!roast @user` \u2014 mention someone to roast them!',

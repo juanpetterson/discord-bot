@@ -70,7 +70,7 @@ export class RandomKickHandler {
         message.channel.send(t('randomkick.escaped', { name: victim.displayName }))
         return
       }
-      await victim.voice.disconnect('Russian Roulette - randomckick')
+      await victim.voice.disconnect('Russian Roulette - randomkick')
       console.log(`[RandomKick] Successfully disconnected ${victim.user.username}`)
       message.channel.send(randomFarewell)
     } catch (error: any) {
