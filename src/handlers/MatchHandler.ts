@@ -14,6 +14,7 @@ import { askAI, matchCommentaryPrompt } from '../ai'
 const OPENDOTA_API = 'https://api.opendota.com/api'
 const RECENT_MATCH_COUNT = 20
 const RESUME_DEBOUNCE_MS = 30_000
+const RESUME_DEBUG_CLASSIFY = (process.env.RESUME_DEBUG_CLASSIFY ?? '').toLowerCase() === 'true'
 type ResumeMode = 'today' | 'yesterday' | 'lastweek'
 
 //  Interfaces 
@@ -1094,7 +1095,9 @@ export class MatchHandler {
 
     const results: PlayerResult[] = []
     const isTurboMatch = (m: RecentMatch) => m.game_mode === 23
-    const isRankedMatch = (m: RecentMatch) => m.lobby_type === 7 || m.game_mode === 22
+    // Rank detection should rely on lobby_type, not game_mode.
+    // game_mode can represent ruleset variants and may cause false "ranked" positives.
+    const isRankedMatch = (m: RecentMatch) => m.lobby_type === 7 || m.lobby_type === 6
 
     // Fetch matches for each mapped user
     for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
@@ -1121,7 +1124,16 @@ export class MatchHandler {
         for (const m of dayMatches) {
           const isRadiant = m.player_slot < 128
           const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
-          const bucket = isTurboMatch(m) ? turbo : (isRankedMatch(m) ? ranked : normal)
+          const bucketType = isTurboMatch(m) ? 'turbo' : (isRankedMatch(m) ? 'ranked' : 'normal')
+          const bucket = bucketType === 'turbo' ? turbo : (bucketType === 'ranked' ? ranked : normal)
+
+          if (RESUME_DEBUG_CLASSIFY) {
+            console.log(
+              `[ResumeClassify] mode=${mode} player=${playerName} steam=${steamId} match=${m.match_id} ` +
+              `bucket=${bucketType} lobby_type=${m.lobby_type} game_mode=${m.game_mode} ` +
+              `start=${new Date(m.start_time * 1000).toISOString()} won=${won}`
+            )
+          }
 
           if (bucket) {
             bucket.total++
