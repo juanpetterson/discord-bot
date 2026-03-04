@@ -43,7 +43,7 @@ const translations = {
     // \u2500\u2500 Resume do Dia \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'resume.fetching': '\ud83d\udd0d Buscando partidas de todos os jogadores mapeados...',
     'resume.title': '\ud83d\udcca Resumo do {day}',
-    'resume.titleLastWeek': '\ud83d\udcca Resumo dos Últimos 7 days',
+    'resume.titleLastWeek': '\ud83d\udcca Resumo dos Últimos 7 dias',
     'resume.today': 'Dia',
     'resume.yesterday': 'Dia Anterior',
     'resume.lastWeek': 'Últimos 7 dias',
