@@ -673,6 +673,11 @@ export class MatchHandler {
     return t('resume.lastWeek')
   }
 
+  private static modeTitle(mode: ResumeMode, dayLabel: string): string {
+    if (mode === 'lastweek') return t('resume.titleLastWeek')
+    return t('resume.title', { day: dayLabel })
+  }
+
   private static consumeResumeDebounce(userId: string, mode: ResumeMode): number {
     const modeDebounce = MatchHandler.resumeDebounceByMode[mode]
     const now = Date.now()
@@ -1070,6 +1075,11 @@ export class MatchHandler {
       wins: number
       losses: number
       total: number
+      normal: {
+        wins: number
+        losses: number
+        total: number
+      }
       ranked: {
         wins: number
         losses: number
@@ -1104,13 +1114,14 @@ export class MatchHandler {
 
         let wins = 0
         let losses = 0
+        const normal = { wins: 0, losses: 0, total: 0 }
         const ranked = { wins: 0, losses: 0, total: 0 }
         const turbo = { wins: 0, losses: 0, total: 0 }
 
         for (const m of dayMatches) {
           const isRadiant = m.player_slot < 128
           const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
-          const bucket = isTurboMatch(m) ? turbo : (isRankedMatch(m) ? ranked : null)
+          const bucket = isTurboMatch(m) ? turbo : (isRankedMatch(m) ? ranked : normal)
 
           if (bucket) {
             bucket.total++
@@ -1127,6 +1138,7 @@ export class MatchHandler {
           wins,
           losses,
           total: dayMatches.length,
+          normal,
           ranked,
           turbo,
         })
@@ -1149,6 +1161,9 @@ export class MatchHandler {
     const totalWins = results.reduce((s, r) => s + r.wins, 0)
     const totalLosses = results.reduce((s, r) => s + r.losses, 0)
     const totalMatches = results.reduce((s, r) => s + r.total, 0)
+    const totalNormalWins = results.reduce((s, r) => s + r.normal.wins, 0)
+    const totalNormalLosses = results.reduce((s, r) => s + r.normal.losses, 0)
+    const totalNormalMatches = results.reduce((s, r) => s + r.normal.total, 0)
     const totalRankedWins = results.reduce((s, r) => s + r.ranked.wins, 0)
     const totalRankedLosses = results.reduce((s, r) => s + r.ranked.losses, 0)
     const totalRankedMatches = results.reduce((s, r) => s + r.ranked.total, 0)
@@ -1164,6 +1179,9 @@ export class MatchHandler {
       return t('resume.playerLineSplit', {
         icon,
         name: r.name,
+        normalWins: r.normal.wins,
+        normalLosses: r.normal.losses,
+        normalTotal: r.normal.total,
         rankedWins: r.ranked.wins,
         rankedLosses: r.ranked.losses,
         rankedTotal: r.ranked.total,
@@ -1177,6 +1195,9 @@ export class MatchHandler {
     })
 
     const totalLine = t('resume.totalLineSplit', {
+      normalWins: totalNormalWins,
+      normalLosses: totalNormalLosses,
+      normalTotal: totalNormalMatches,
       rankedWins: totalRankedWins,
       rankedLosses: totalRankedLosses,
       rankedTotal: totalRankedMatches,
@@ -1190,7 +1211,7 @@ export class MatchHandler {
 
     const embed = new EmbedBuilder()
       .setColor(totalWins >= totalLosses ? 0x57f287 : 0xed4245)
-      .setTitle(t('resume.title', { day: dayLabel }))
+      .setTitle(MatchHandler.modeTitle(mode, dayLabel))
       .setDescription(lines.join('\n\n'))
       .addFields({ name: t('resume.totalFieldTitle'), value: totalLine, inline: false })
       .setFooter({ text: t('resume.footer') })
