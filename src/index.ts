@@ -493,6 +493,12 @@ client.on('interactionCreate', async (interaction) => {
     return
   }
 
+  // Resume buttons (!resumedoday / !resumedolastday rerun)
+  if (isButtonInteraction && MatchHandler.isResumeButton(interaction.customId)) {
+    await MatchHandler.handleResumeButton(interaction)
+    return
+  }
+
   if (messageInteractionName === 'sounds' || isButtonInteraction) {
     // ready file names from the assets/uploads folder
     VoiceHandler.player?.play

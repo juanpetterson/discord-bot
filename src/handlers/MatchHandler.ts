@@ -1,5 +1,12 @@
 import https from 'https'
-import { Message, EmbedBuilder } from 'discord.js'
+import {
+  Message,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonInteraction,
+  ButtonStyle,
+} from 'discord.js'
 import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
 import { t, LANG } from '../i18n'
 import { askAI, matchCommentaryPrompt } from '../ai'
@@ -643,6 +650,50 @@ function resolveSteamId(
 //  Handler 
 
 export class MatchHandler {
+  static readonly RESUME_TODAY_BUTTON_ID = 'resume_today'
+  static readonly RESUME_YESTERDAY_BUTTON_ID = 'resume_yesterday'
+
+  static isResumeButton(customId: string): boolean {
+    return customId === MatchHandler.RESUME_TODAY_BUTTON_ID
+      || customId === MatchHandler.RESUME_YESTERDAY_BUTTON_ID
+  }
+
+  static async handleResumeButton(interaction: ButtonInteraction) {
+    const mode: 'today' | 'yesterday' | null =
+      interaction.customId === MatchHandler.RESUME_TODAY_BUTTON_ID
+        ? 'today'
+        : interaction.customId === MatchHandler.RESUME_YESTERDAY_BUTTON_ID
+          ? 'yesterday'
+          : null
+
+    if (!mode) return
+
+    try {
+      await interaction.deferUpdate()
+      if (!interaction.channel) {
+        await interaction.followUp({ content: '⚠️ Could not determine channel for this summary.', ephemeral: true })
+        return
+      }
+      await MatchHandler.daySummaryInChannel(interaction.channel as Message['channel'], mode)
+    } catch (err: any) {
+      console.error('[DaySummaryButton] Error:', err?.message ?? err)
+      await interaction.followUp({ content: t('match.error'), ephemeral: true }).catch(() => {})
+    }
+  }
+
+  private static buildResumeButtons() {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(MatchHandler.RESUME_TODAY_BUTTON_ID)
+        .setLabel('Resume do Day')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(MatchHandler.RESUME_YESTERDAY_BUTTON_ID)
+        .setLabel('Resume do Last Day')
+        .setStyle(ButtonStyle.Secondary)
+    )
+  }
+
   /** Legacy entry point used by !match <steamId> */
   static async getLastMatch(message: Message, steamId: string) {
     await MatchHandler._fetch(message, steamId, null)
@@ -917,106 +968,170 @@ export class MatchHandler {
    */
   static async daySummary(message: Message, mode: 'today' | 'yesterday') {
     try {
-      await (message.channel as any).sendTyping?.()
-      await loadHeroMap()
-
-      const dayLabel = mode === 'today' ? t('resume.today') : t('resume.yesterday')
-      message.channel.send(t('resume.fetching'))
-
-      // Determine the target day boundaries in BRT (America/Sao_Paulo, UTC-3).
-      // The server may run in UTC (Docker), but users are in Brazil, so we must
-      // compute "today" / "yesterday" relative to Brazilian time.
-      const BRT_OFFSET_MS = -3 * 60 * 60 * 1000 // UTC-3
-      const nowUtc = Date.now()
-      const nowBrt = new Date(nowUtc + BRT_OFFSET_MS) // shifted to BRT wall-clock
-      const targetDate = new Date(nowBrt)
-      if (mode === 'yesterday') {
-        targetDate.setUTCDate(targetDate.getUTCDate() - 1)
-      }
-      // Day boundaries in BRT, converted back to real UTC unix timestamps
-      const dayStartUtc = Date.UTC(
-        targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate(),
-        0, 0, 0
-      ) - BRT_OFFSET_MS // subtract offset to go from BRT wall-clock back to UTC
-      const dayEndUtc = dayStartUtc + 24 * 60 * 60 * 1000 // exactly 24 hours later
-      const dayStartUnix = Math.floor(dayStartUtc / 1000)
-      const dayEndUnix = Math.floor(dayEndUtc / 1000) - 1 // inclusive end (last second of the day)
-
-      interface PlayerResult {
-        name: string
-        wins: number
-        losses: number
-        total: number
-      }
-
-      const results: PlayerResult[] = []
-
-      // Fetch matches for each mapped user
-      for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
-        try {
-          const playerName = await fetchDotaNick(steamId, discordName)
-          const recent: RecentMatch[] = await httpsGet(
-            `${OPENDOTA_API}/players/${steamId}/recentMatches`
-          )
-          if (!recent || !Array.isArray(recent) || recent.length === 0) continue
-
-          // Filter matches that started within the target day
-          const dayMatches = recent.filter(m => {
-            return m.start_time >= dayStartUnix && m.start_time <= dayEndUnix
-          })
-
-          if (dayMatches.length === 0) continue
-
-          let wins = 0
-          let losses = 0
-          for (const m of dayMatches) {
-            const isRadiant = m.player_slot < 128
-            const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
-            if (won) wins++
-            else losses++
-          }
-
-          results.push({ name: playerName, wins, losses, total: dayMatches.length })
-        } catch (err) {
-          console.warn(`[DaySummary] Failed to fetch for ${discordName}:`, err)
-        }
-      }
-
-      if (results.length === 0) {
-        message.channel.send(t('resume.noMatches', { day: dayLabel }))
-        return
-      }
-
-      // Sort by total matches descending, then by wins descending
-      results.sort((a, b) => b.total - a.total || b.wins - a.wins)
-
-      const totalWins = results.reduce((s, r) => s + r.wins, 0)
-      const totalLosses = results.reduce((s, r) => s + r.losses, 0)
-      const totalMatches = results.reduce((s, r) => s + r.total, 0)
-
-      const lines = results.map(r => {
-        const winRate = r.total > 0 ? Math.round((r.wins / r.total) * 100) : 0
-        let icon = '⚪'
-        if (r.wins > r.losses) icon = '🟢'
-        else if (r.losses > r.wins) icon = '🔴'
-        else if (r.total > 0) icon = '🟡'
-        return t('resume.playerLine', { icon, name: r.name, wins: r.wins, losses: r.losses, total: r.total })
-      })
-
-      const totalLine = t('resume.totalLine', { wins: totalWins, losses: totalLosses, total: totalMatches })
-
-      const embed = new EmbedBuilder()
-        .setColor(totalWins >= totalLosses ? 0x57f287 : 0xed4245)
-        .setTitle(t('resume.title', { day: dayLabel }))
-        .setDescription(lines.join('\n') + '\n\n' + totalLine)
-        .setFooter({ text: t('resume.footer') })
-        .setTimestamp()
-
-      message.channel.send({ embeds: [embed] })
+      await MatchHandler.daySummaryInChannel(message.channel, mode)
     } catch (err: any) {
       console.error('[DaySummary] Error:', err?.message ?? err)
       message.reply(t('match.error'))
     }
+  }
+
+  private static async daySummaryInChannel(channel: Message['channel'], mode: 'today' | 'yesterday') {
+    await (channel as any).sendTyping?.()
+    await loadHeroMap()
+
+    const dayLabel = mode === 'today' ? t('resume.today') : t('resume.yesterday')
+    channel.send(t('resume.fetching'))
+
+    // Determine the target day boundaries in BRT (America/Sao_Paulo, UTC-3).
+    // The server may run in UTC (Docker), but users are in Brazil, so we must
+    // compute "today" / "yesterday" relative to Brazilian time.
+    const BRT_OFFSET_MS = -3 * 60 * 60 * 1000 // UTC-3
+    const nowUtc = Date.now()
+    const nowBrt = new Date(nowUtc + BRT_OFFSET_MS) // shifted to BRT wall-clock
+    const targetDate = new Date(nowBrt)
+    if (mode === 'yesterday') {
+      targetDate.setUTCDate(targetDate.getUTCDate() - 1)
+    }
+    // Day boundaries in BRT, converted back to real UTC unix timestamps
+    const dayStartUtc = Date.UTC(
+      targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate(),
+      0, 0, 0
+    ) - BRT_OFFSET_MS // subtract offset to go from BRT wall-clock back to UTC
+    const dayEndUtc = dayStartUtc + 24 * 60 * 60 * 1000 // exactly 24 hours later
+    const dayStartUnix = Math.floor(dayStartUtc / 1000)
+    const dayEndUnix = Math.floor(dayEndUtc / 1000) - 1 // inclusive end (last second of the day)
+
+    interface PlayerResult {
+      name: string
+      wins: number
+      losses: number
+      total: number
+      ranked: {
+        wins: number
+        losses: number
+        total: number
+      }
+      turbo: {
+        wins: number
+        losses: number
+        total: number
+      }
+    }
+
+    const results: PlayerResult[] = []
+    const isTurboMatch = (m: RecentMatch) => m.game_mode === 23
+    const isRankedMatch = (m: RecentMatch) => m.lobby_type === 7 || m.game_mode === 22
+
+    // Fetch matches for each mapped user
+    for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
+      try {
+        const playerName = await fetchDotaNick(steamId, discordName)
+        const recent: RecentMatch[] = await httpsGet(
+          `${OPENDOTA_API}/players/${steamId}/recentMatches`
+        )
+        if (!recent || !Array.isArray(recent) || recent.length === 0) continue
+
+        // Filter matches that started within the target day
+        const dayMatches = recent.filter(m => {
+          return m.start_time >= dayStartUnix && m.start_time <= dayEndUnix
+        })
+
+        if (dayMatches.length === 0) continue
+
+        let wins = 0
+        let losses = 0
+        const ranked = { wins: 0, losses: 0, total: 0 }
+        const turbo = { wins: 0, losses: 0, total: 0 }
+
+        for (const m of dayMatches) {
+          const isRadiant = m.player_slot < 128
+          const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
+          const bucket = isTurboMatch(m) ? turbo : (isRankedMatch(m) ? ranked : null)
+
+          if (bucket) {
+            bucket.total++
+            if (won) bucket.wins++
+            else bucket.losses++
+          }
+
+          if (won) wins++
+          else losses++
+        }
+
+        results.push({
+          name: playerName,
+          wins,
+          losses,
+          total: dayMatches.length,
+          ranked,
+          turbo,
+        })
+      } catch (err) {
+        console.warn(`[DaySummary] Failed to fetch for ${discordName}:`, err)
+      }
+    }
+
+    if (results.length === 0) {
+      channel.send({
+        content: t('resume.noMatches', { day: dayLabel }),
+        components: [MatchHandler.buildResumeButtons()],
+      })
+      return
+    }
+
+    // Sort by total matches descending, then by wins descending
+    results.sort((a, b) => b.total - a.total || b.wins - a.wins)
+
+    const totalWins = results.reduce((s, r) => s + r.wins, 0)
+    const totalLosses = results.reduce((s, r) => s + r.losses, 0)
+    const totalMatches = results.reduce((s, r) => s + r.total, 0)
+    const totalRankedWins = results.reduce((s, r) => s + r.ranked.wins, 0)
+    const totalRankedLosses = results.reduce((s, r) => s + r.ranked.losses, 0)
+    const totalRankedMatches = results.reduce((s, r) => s + r.ranked.total, 0)
+    const totalTurboWins = results.reduce((s, r) => s + r.turbo.wins, 0)
+    const totalTurboLosses = results.reduce((s, r) => s + r.turbo.losses, 0)
+    const totalTurboMatches = results.reduce((s, r) => s + r.turbo.total, 0)
+
+    const lines = results.map(r => {
+      let icon = '⚪'
+      if (r.wins > r.losses) icon = '🟢'
+      else if (r.losses > r.wins) icon = '🔴'
+      else if (r.total > 0) icon = '🟡'
+      return t('resume.playerLineSplit', {
+        icon,
+        name: r.name,
+        rankedWins: r.ranked.wins,
+        rankedLosses: r.ranked.losses,
+        rankedTotal: r.ranked.total,
+        turboWins: r.turbo.wins,
+        turboLosses: r.turbo.losses,
+        turboTotal: r.turbo.total,
+        wins: r.wins,
+        losses: r.losses,
+        total: r.total,
+      })
+    })
+
+    const totalLine = t('resume.totalLineSplit', {
+      rankedWins: totalRankedWins,
+      rankedLosses: totalRankedLosses,
+      rankedTotal: totalRankedMatches,
+      turboWins: totalTurboWins,
+      turboLosses: totalTurboLosses,
+      turboTotal: totalTurboMatches,
+      wins: totalWins,
+      losses: totalLosses,
+      total: totalMatches,
+    })
+
+    const embed = new EmbedBuilder()
+      .setColor(totalWins >= totalLosses ? 0x57f287 : 0xed4245)
+      .setTitle(t('resume.title', { day: dayLabel }))
+      .setDescription(lines.join('\n') + '\n\n' + totalLine)
+      .setFooter({ text: t('resume.footer') })
+      .setTimestamp()
+
+    channel.send({ embeds: [embed], components: [MatchHandler.buildResumeButtons()] })
   }
 
   /** Exported for RoastHandler: returns aggregate stats for a steam accountId */

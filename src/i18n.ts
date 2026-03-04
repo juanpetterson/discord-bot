@@ -49,6 +49,8 @@ const translations = {
     'resume.playerLine': '{icon} **{name}** \u2014 {wins}V / {losses}D ({total} partidas)',
     'resume.footer': 'Dados das \u00faltimas partidas de cada jogador via OpenDota',
     'resume.totalLine': '\ud83d\udcc8 **Total:** {wins}V / {losses}D ({total} partidas)',
+    'resume.playerLineSplit': '{icon} **{name}** \u2014 Ranked: {rankedWins}V/{rankedLosses}D ({rankedTotal}) | Turbo: {turboWins}V/{turboLosses}D ({turboTotal}) | Total: {wins}V/{losses}D ({total})',
+    'resume.totalLineSplit': '\ud83d\udcc8 **Total:** Ranked {rankedWins}V/{rankedLosses}D ({rankedTotal}) | Turbo {turboWins}V/{turboLosses}D ({turboTotal}) | Geral {wins}V/{losses}D ({total})',
 
     // \u2500\u2500 Roast \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'roast.usage': 'Uso: `!roast @user` \u2014 marque algu\u00e9m pra tomar roast!',
@@ -241,6 +243,8 @@ const translations = {
     'resume.playerLine': '{icon} **{name}** \u2014 {wins}W / {losses}L ({total} matches)',
     'resume.footer': 'Recent match data for each player via OpenDota',
     'resume.totalLine': '\ud83d\udcc8 **Total:** {wins}W / {losses}L ({total} matches)',
+    'resume.playerLineSplit': '{icon} **{name}** \u2014 Ranked: {rankedWins}W/{rankedLosses}L ({rankedTotal}) | Turbo: {turboWins}W/{turboLosses}L ({turboTotal}) | Total: {wins}W/{losses}L ({total})',
+    'resume.totalLineSplit': '\ud83d\udcc8 **Total:** Ranked {rankedWins}W/{rankedLosses}L ({rankedTotal}) | Turbo {turboWins}W/{turboLosses}L ({turboTotal}) | Overall {wins}W/{losses}L ({total})',
 
     // \u2500\u2500 Roast \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'roast.usage': 'Usage: `!roast @user` \u2014 mention someone to roast them!',
