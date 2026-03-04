@@ -923,16 +923,24 @@ export class MatchHandler {
       const dayLabel = mode === 'today' ? t('resume.today') : t('resume.yesterday')
       message.channel.send(t('resume.fetching'))
 
-      // Determine the target day boundaries (in local time / UTC)
-      const now = new Date()
-      const targetDate = new Date(now)
+      // Determine the target day boundaries in BRT (America/Sao_Paulo, UTC-3).
+      // The server may run in UTC (Docker), but users are in Brazil, so we must
+      // compute "today" / "yesterday" relative to Brazilian time.
+      const BRT_OFFSET_MS = -3 * 60 * 60 * 1000 // UTC-3
+      const nowUtc = Date.now()
+      const nowBrt = new Date(nowUtc + BRT_OFFSET_MS) // shifted to BRT wall-clock
+      const targetDate = new Date(nowBrt)
       if (mode === 'yesterday') {
-        targetDate.setDate(targetDate.getDate() - 1)
+        targetDate.setUTCDate(targetDate.getUTCDate() - 1)
       }
-      const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0)
-      const dayEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59)
-      const dayStartUnix = Math.floor(dayStart.getTime() / 1000)
-      const dayEndUnix = Math.floor(dayEnd.getTime() / 1000)
+      // Day boundaries in BRT, converted back to real UTC unix timestamps
+      const dayStartUtc = Date.UTC(
+        targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate(),
+        0, 0, 0
+      ) - BRT_OFFSET_MS // subtract offset to go from BRT wall-clock back to UTC
+      const dayEndUtc = dayStartUtc + 24 * 60 * 60 * 1000 // exactly 24 hours later
+      const dayStartUnix = Math.floor(dayStartUtc / 1000)
+      const dayEndUnix = Math.floor(dayEndUtc / 1000) - 1 // inclusive end (last second of the day)
 
       interface PlayerResult {
         name: string
