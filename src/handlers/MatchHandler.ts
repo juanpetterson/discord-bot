@@ -13,6 +13,8 @@ import { askAI, matchCommentaryPrompt } from '../ai'
 
 const OPENDOTA_API = 'https://api.opendota.com/api'
 const RECENT_MATCH_COUNT = 20
+const RESUME_DEBOUNCE_MS = 30_000
+type ResumeMode = 'today' | 'yesterday' | 'lastweek'
 
 //  Interfaces 
 
@@ -652,23 +654,65 @@ function resolveSteamId(
 export class MatchHandler {
   static readonly RESUME_TODAY_BUTTON_ID = 'resume_today'
   static readonly RESUME_YESTERDAY_BUTTON_ID = 'resume_yesterday'
+  static readonly RESUME_LASTWEEK_BUTTON_ID = 'resume_lastweek'
+  private static readonly resumeDebounceByMode: Record<ResumeMode, Map<string, number>> = {
+    today: new Map(),
+    yesterday: new Map(),
+    lastweek: new Map(),
+  }
+
+  private static modeCommand(mode: ResumeMode): string {
+    if (mode === 'today') return '!resumedoday'
+    if (mode === 'yesterday') return '!resumedolastday'
+    return '!resumedolastweek'
+  }
+
+  private static modeLabel(mode: ResumeMode): string {
+    if (mode === 'today') return t('resume.today')
+    if (mode === 'yesterday') return t('resume.yesterday')
+    return t('resume.lastWeek')
+  }
+
+  private static consumeResumeDebounce(userId: string, mode: ResumeMode): number {
+    const modeDebounce = MatchHandler.resumeDebounceByMode[mode]
+    const now = Date.now()
+    const lastAt = modeDebounce.get(userId) ?? 0
+    const elapsed = now - lastAt
+    if (elapsed < RESUME_DEBOUNCE_MS) {
+      return Math.ceil((RESUME_DEBOUNCE_MS - elapsed) / 1000)
+    }
+    modeDebounce.set(userId, now)
+    return 0
+  }
 
   static isResumeButton(customId: string): boolean {
     return customId === MatchHandler.RESUME_TODAY_BUTTON_ID
       || customId === MatchHandler.RESUME_YESTERDAY_BUTTON_ID
+      || customId === MatchHandler.RESUME_LASTWEEK_BUTTON_ID
   }
 
   static async handleResumeButton(interaction: ButtonInteraction) {
-    const mode: 'today' | 'yesterday' | null =
+    const mode: ResumeMode | null =
       interaction.customId === MatchHandler.RESUME_TODAY_BUTTON_ID
         ? 'today'
         : interaction.customId === MatchHandler.RESUME_YESTERDAY_BUTTON_ID
           ? 'yesterday'
+          : interaction.customId === MatchHandler.RESUME_LASTWEEK_BUTTON_ID
+            ? 'lastweek'
           : null
 
     if (!mode) return
 
     try {
+      const remaining = MatchHandler.consumeResumeDebounce(interaction.user.id, mode)
+      if (remaining > 0) {
+        await interaction.reply({
+          content: t('resume.cooldown', { seconds: remaining, command: MatchHandler.modeCommand(mode) }),
+          ephemeral: true,
+        })
+        return
+      }
+
       await interaction.deferUpdate()
       if (!interaction.channel) {
         await interaction.followUp({ content: '⚠️ Could not determine channel for this summary.', ephemeral: true })
@@ -685,11 +729,15 @@ export class MatchHandler {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(MatchHandler.RESUME_TODAY_BUTTON_ID)
-        .setLabel('Resume do Day')
-        .setStyle(ButtonStyle.Primary),
+        .setLabel(t('resume.buttonToday'))
+        .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
         .setCustomId(MatchHandler.RESUME_YESTERDAY_BUTTON_ID)
-        .setLabel('Resume do Last Day')
+        .setLabel(t('resume.buttonYesterday'))
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(MatchHandler.RESUME_LASTWEEK_BUTTON_ID)
+        .setLabel(t('resume.buttonLastWeek'))
         .setStyle(ButtonStyle.Secondary)
     )
   }
@@ -962,12 +1010,17 @@ export class MatchHandler {
   }
 
   /**
-   * !resumedoday / !resumedolastday
-   * Fetches recent matches for ALL mapped users, filters by the target day,
+   * !resumedoday / !resumedolastday / !resumedolastweek
+   * Fetches recent matches for ALL mapped users, filters by the target range,
    * and posts a summary of wins/losses per player.
    */
-  static async daySummary(message: Message, mode: 'today' | 'yesterday') {
+  static async daySummary(message: Message, mode: ResumeMode) {
     try {
+      const remaining = MatchHandler.consumeResumeDebounce(message.author.id, mode)
+      if (remaining > 0) {
+        message.reply(t('resume.cooldown', { seconds: remaining, command: MatchHandler.modeCommand(mode) }))
+        return
+      }
       await MatchHandler.daySummaryInChannel(message.channel, mode)
     } catch (err: any) {
       console.error('[DaySummary] Error:', err?.message ?? err)
@@ -975,11 +1028,11 @@ export class MatchHandler {
     }
   }
 
-  private static async daySummaryInChannel(channel: Message['channel'], mode: 'today' | 'yesterday') {
+  private static async daySummaryInChannel(channel: Message['channel'], mode: ResumeMode) {
     await (channel as any).sendTyping?.()
     await loadHeroMap()
 
-    const dayLabel = mode === 'today' ? t('resume.today') : t('resume.yesterday')
+    const dayLabel = MatchHandler.modeLabel(mode)
     channel.send(t('resume.fetching'))
 
     // Determine the target day boundaries in BRT (America/Sao_Paulo, UTC-3).
@@ -988,18 +1041,29 @@ export class MatchHandler {
     const BRT_OFFSET_MS = -3 * 60 * 60 * 1000 // UTC-3
     const nowUtc = Date.now()
     const nowBrt = new Date(nowUtc + BRT_OFFSET_MS) // shifted to BRT wall-clock
-    const targetDate = new Date(nowBrt)
+    const rangeStartDate = new Date(nowBrt)
+    const rangeEndDate = new Date(nowBrt)
     if (mode === 'yesterday') {
-      targetDate.setUTCDate(targetDate.getUTCDate() - 1)
+      rangeStartDate.setUTCDate(rangeStartDate.getUTCDate() - 1)
+      rangeEndDate.setTime(rangeStartDate.getTime())
+    } else if (mode === 'lastweek') {
+      // Last week = last 7 full days, excluding today.
+      rangeEndDate.setUTCDate(rangeEndDate.getUTCDate() - 1)
+      rangeStartDate.setTime(rangeEndDate.getTime())
+      rangeStartDate.setUTCDate(rangeStartDate.getUTCDate() - 6)
     }
-    // Day boundaries in BRT, converted back to real UTC unix timestamps
+
+    // Range boundaries in BRT, converted back to real UTC unix timestamps
     const dayStartUtc = Date.UTC(
-      targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate(),
+      rangeStartDate.getUTCFullYear(), rangeStartDate.getUTCMonth(), rangeStartDate.getUTCDate(),
       0, 0, 0
     ) - BRT_OFFSET_MS // subtract offset to go from BRT wall-clock back to UTC
-    const dayEndUtc = dayStartUtc + 24 * 60 * 60 * 1000 // exactly 24 hours later
+    const rangeEndUtc = Date.UTC(
+      rangeEndDate.getUTCFullYear(), rangeEndDate.getUTCMonth(), rangeEndDate.getUTCDate(),
+      0, 0, 0
+    ) - BRT_OFFSET_MS + 24 * 60 * 60 * 1000
     const dayStartUnix = Math.floor(dayStartUtc / 1000)
-    const dayEndUnix = Math.floor(dayEndUtc / 1000) - 1 // inclusive end (last second of the day)
+    const dayEndUnix = Math.floor(rangeEndUtc / 1000) - 1 // inclusive end (last second of the range)
 
     interface PlayerResult {
       name: string
@@ -1127,7 +1191,8 @@ export class MatchHandler {
     const embed = new EmbedBuilder()
       .setColor(totalWins >= totalLosses ? 0x57f287 : 0xed4245)
       .setTitle(t('resume.title', { day: dayLabel }))
-      .setDescription(lines.join('\n') + '\n\n' + totalLine)
+      .setDescription(lines.join('\n\n'))
+      .addFields({ name: t('resume.totalFieldTitle'), value: totalLine, inline: false })
       .setFooter({ text: t('resume.footer') })
       .setTimestamp()
 

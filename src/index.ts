@@ -178,13 +178,17 @@ client.on('messageCreate', async (message: Message) => {
 
     // ===== NEW FEATURES =====
 
-    // Day Summary: !resumedoday / !resumedolastday
+    // Day Summary: !resumedoday / !resumedolastday / !resumedolastweek
     if (messageContent === '!resumedoday') {
       await MatchHandler.daySummary(message, 'today')
       return
     }
     if (messageContent === '!resumedolastday') {
       await MatchHandler.daySummary(message, 'yesterday')
+      return
+    }
+    if (messageContent === '!resumedolastweek') {
+      await MatchHandler.daySummary(message, 'lastweek')
       return
     }
 
@@ -363,7 +367,7 @@ client.on('messageCreate', async (message: Message) => {
         .setTitle('🤖 Bot Commands')
         .addFields(
           { name: '🎵 Sound', value: '`!play <name>` — Play a sound\n`!sounds` — List sounds (slash)', inline: false },
-          { name: '🎮 Dota 2', value: '`!random <count/players>` — Randomize heroes\n`!lastmatch [@user|nick]` — Last 10 match analysis\n`!match <steam_id>` — Last match recap (legacy)\n`!resumedoday` — Day summary (wins/losses all players)\n`!resumedolastday` — Yesterday summary', inline: false },
+          { name: '🎮 Dota 2', value: '`!random <count/players>` — Randomize heroes\n`!lastmatch [@user|nick]` — Last 10 match analysis\n`!match <steam_id>` — Last match recap (legacy)\n`!resumedoday` — Day summary (wins/losses all players)\n`!resumedolastday` — Yesterday summary\n`!resumedolastweek` — Last 7 days summary', inline: false },
           { name: '🔫 Kick', value: '`!randomkick` — Russian roulette (random kick)\n`!votekick <nick>` — Start a votekick\n`!voteyes` — Vote yes on active votekick', inline: false },
           { name: '🎙️ Clip', value: '`!clip` — Save the last 60 seconds of voice chat as MP3 + individual tracks ZIP', inline: false },
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
@@ -493,7 +497,7 @@ client.on('interactionCreate', async (interaction) => {
     return
   }
 
-  // Resume buttons (!resumedoday / !resumedolastday rerun)
+  // Resume buttons (!resumedoday / !resumedolastday / !resumedolastweek rerun)
   if (isButtonInteraction && MatchHandler.isResumeButton(interaction.customId)) {
     await MatchHandler.handleResumeButton(interaction)
     return
