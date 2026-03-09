@@ -1183,6 +1183,7 @@ export class MatchHandler {
     const totalTurboWins = results.reduce((s, r) => s + r.turbo.wins, 0)
     const totalTurboLosses = results.reduce((s, r) => s + r.turbo.losses, 0)
     const totalTurboMatches = results.reduce((s, r) => s + r.turbo.total, 0)
+    const totalPoints = results.reduce((s, r) => s + resumeRankPoints(r), 0)
 
     const lines = results.map(r => {
       let icon = '⚪'
@@ -1204,6 +1205,7 @@ export class MatchHandler {
         wins: r.wins,
         losses: r.losses,
         total: r.total,
+        points: resumeRankPoints(r),
       })
     })
 
@@ -1220,6 +1222,7 @@ export class MatchHandler {
       wins: totalWins,
       losses: totalLosses,
       total: totalMatches,
+      points: totalPoints,
     })
 
     const embed = new EmbedBuilder()
