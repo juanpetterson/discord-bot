@@ -1167,8 +1167,12 @@ export class MatchHandler {
       return
     }
 
-    // Sort by weighted queue score from victories only: ranked (4), normal (2), turbo (1).
-    const resumeRankPoints = (r: PlayerResult) => (r.ranked.wins * 4) + (r.normal.wins * 2) + r.turbo.wins
+    // Weighted queue score: wins add points and losses subtract points.
+    // ranked (4), normal (2), turbo (1)
+    const resumeRankPoints = (r: PlayerResult) =>
+      ((r.ranked.wins - r.ranked.losses) * 4) +
+      ((r.normal.wins - r.normal.losses) * 2) +
+      (r.turbo.wins - r.turbo.losses)
     results.sort((a, b) => resumeRankPoints(b) - resumeRankPoints(a) || b.total - a.total || b.wins - a.wins)
 
     const totalWins = results.reduce((s, r) => s + r.wins, 0)
