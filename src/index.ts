@@ -102,7 +102,8 @@ const COLORS_SCHEME_EXTRA = {
 }
 
 const USER_JOINED_CHANNEL_SOUNDS = {
-  'carlesso2154': 'geral - trompete.mp3',
+  'carlesso2154': 'dw - tananana nananan.mp3',
+  // 'carlesso2154': 'geral - trompete.mp3',
   'jacksonmajolo': 'geral - pode mamar.mp3',
   'gbonassina': 'gre - ó o je me empurrando.ogg',
   'cristiano.bonassina': 'cris - boooa gurizada.mp3',
