@@ -80,6 +80,7 @@ import { PollHandler } from './handlers/PollHandler'
 import { BetHandler } from './handlers/BetHandler'
 import { GroupHandler } from './handlers/GroupHandler'
 import { ClipHandler } from './handlers/ClipHandler'
+import { JoinSoundHandler } from './handlers/JoinSoundHandler'
 
 import { calculateTextWidth } from './utils'
 
@@ -99,18 +100,6 @@ const COLORS_SCHEME_EXTRA = {
   0: 0xff0000,
   1: 0x00ff00,
   2: 0x0000ff,
-}
-
-const USER_JOINED_CHANNEL_SOUNDS = {
-  'carlesso2154': 'dw - tananana nananan.mp3',
-  // 'carlesso2154': 'geral - trompete.mp3',
-  'jacksonmajolo': 'geral - pode mamar.mp3',
-  'gbonassina': 'gre - ó o je me empurrando.ogg',
-  'cristiano.bonassina': 'cris - boooa gurizada.mp3',
-  'eradim': 'rafiki - aiiiii gre.ogg',
-  'wellfb': 'sido - ja tem tornado ja de novo.ogg',
-  'dedableo': 'dw - um bilhao de dano.mp3',
-  'juanpetterson.': 'binho - aiii rurrroor.ogg',
 }
 
 export const client = new Client({
@@ -162,10 +151,11 @@ client.on(Events.VoiceStateUpdate, async (oldState: VoiceState, newState: VoiceS
     const user = newState.member?.user;
     if (user) {
       console.log(`${user.username} has joined the voice channel ${newState.channel?.name}`);
-      const soundName = USER_JOINED_CHANNEL_SOUNDS[user.username as keyof typeof USER_JOINED_CHANNEL_SOUNDS];
-      const fileExists = fs.existsSync(`./src/assets/uploads/${soundName}`);
+      const soundName = JoinSoundHandler.getJoinSoundForUser(user.id, user.username);
+      const filePath = soundName ? JoinSoundHandler.getSoundPath(soundName) : '';
+      const fileExists = soundName ? fs.existsSync(filePath) : false;
       if (soundName && fileExists) {
-        VoiceHandler.executeVoice(channel, `./src/assets/uploads/${soundName}`);
+        VoiceHandler.executeVoice(channel, filePath);
       }
     }
   }
@@ -403,8 +393,7 @@ client.on('messageCreate', async (message: Message) => {
     if (messageContent.startsWith('!play')) {
       const args = messageContent.split(' ')
       const soundName = args.slice(1).join(' ')
-      const sounds = fs.readdirSync('./src/assets/uploads')
-      const soundFileName = sounds.find((sound) => sound.split('.')[0].includes(soundName))
+      const { fileName: soundFileName } = JoinSoundHandler.resolveClosestSound(soundName)
 
       if (!soundFileName) return
 
@@ -594,6 +583,36 @@ client.on('interactionCreate', async (interaction) => {
 
   if (interaction.commandName === 'sounds') {
     postAvailableSounds(interaction)
+  }
+
+  if (interaction.commandName === 'joinsound') {
+    const targetUser = interaction.options.getUser('user', true)
+    const soundQuery = interaction.options.getString('sound', true)
+    const { fileName, score, suggestions } = JoinSoundHandler.resolveClosestSound(soundQuery)
+
+    if (!fileName) {
+      const suggestionsMessage = suggestions.length > 0
+        ? ` Closest matches: ${suggestions.map((sound) => `\`${sound}\``).join(', ')}.`
+        : ''
+
+      await interaction.reply({
+        content: `No uploaded sound matched \`${soundQuery}\`.${suggestionsMessage}`,
+        ephemeral: true,
+      })
+      return
+    }
+
+    JoinSoundHandler.setJoinSoundForUser(targetUser.id, fileName)
+
+    const resolutionMessage = score >= 0.999
+      ? `Join sound updated for <@${targetUser.id}>: \`${fileName}\`.`
+      : `Join sound updated for <@${targetUser.id}>: \`${fileName}\` (closest match for \`${soundQuery}\`).`
+
+    await interaction.reply({
+      content: resolutionMessage,
+      ephemeral: true,
+    })
+    return
   }
 
   if (interaction.commandName === 'delete') {

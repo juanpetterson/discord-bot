@@ -94,6 +94,24 @@ const commands = [
     description: 'List available sound on the bot',
   },
   {
+    name: 'joinsound',
+    description: 'Set the sound played when a user joins a voice channel',
+    options: [
+      {
+        name: 'user',
+        type: 6,
+        description: 'Discord user to map',
+        required: true,
+      },
+      {
+        name: 'sound',
+        type: 3,
+        description: 'Sound name or part of it',
+        required: true,
+      },
+    ]
+  },
+  {
     name: 'upload',
     description: 'Upload sound',
     options: [
