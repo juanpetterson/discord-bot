@@ -917,5 +917,5 @@ async function downloadMP3(attachment:  {url: string, name: string }, destinatio
 }
 
 keepAlive()
-// registerCommands()
+registerCommands()
 client.login(process.env.DISCORD_TOKEN)
