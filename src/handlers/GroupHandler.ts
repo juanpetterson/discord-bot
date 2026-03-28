@@ -1,4 +1,4 @@
-import { Message, GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from 'discord.js'
+import { Message, GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits } from 'discord.js'
 import { t } from '../i18n'
 import { askAI, heroPickPrompt } from '../ai'
 
@@ -537,6 +537,18 @@ export class GroupHandler {
     await interaction.channel.send({ embeds, components: [actionRow] })
   }
 
+  private static _isPublicVoiceChannel(channel: any, guild: any) {
+    if (!channel || channel.type !== ChannelType.GuildVoice) return false
+    if (channel.id === guild.afkChannelId) return false
+    if (channel.userLimit > 0 && channel.members.size >= channel.userLimit) return false
+
+    const everyonePermissions = channel.permissionsFor(guild.roles.everyone)
+    return Boolean(
+      everyonePermissions?.has(PermissionFlagsBits.ViewChannel) &&
+      everyonePermissions?.has(PermissionFlagsBits.Connect)
+    )
+  }
+
   // ─── Voice channel splitter ───────────────────────────────────────────────
   /**
    * After teams are decided, move Team A to a second voice channel.
@@ -572,10 +584,17 @@ export class GroupHandler {
     const homeChannel = guild.channels.cache.get(homeChannelId) as any
     if (!homeChannel) return
 
-    // Find another voice channel in the same guild (any, as long as it isn't the home)
-    const otherChannel = guild.channels.cache.find(
-      (ch: any) => ch.type === ChannelType.GuildVoice && ch.id !== homeChannelId
-    ) as any
+    const otherChannel = guild.channels.cache
+      .filter((ch: any) =>
+        ch.id !== homeChannelId && GroupHandler._isPublicVoiceChannel(ch, guild)
+      )
+      .sort((a: any, b: any) => {
+        const aSameCategory = a.parentId === homeChannel.parentId ? 1 : 0
+        const bSameCategory = b.parentId === homeChannel.parentId ? 1 : 0
+        if (aSameCategory !== bSameCategory) return bSameCategory - aSameCategory
+        return (a.rawPosition ?? 0) - (b.rawPosition ?? 0)
+      })
+      .first() as any
 
     if (!otherChannel) {
       await interaction.channel.send(t('group.noSecondChannel'))
