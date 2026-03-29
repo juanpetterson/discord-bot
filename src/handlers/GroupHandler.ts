@@ -30,6 +30,11 @@ const activeGroups = new Map<string, Group>()
 interface StoredTeams {
   teamA: { id: string; name: string }[]
   teamB: { id: string; name: string }[]
+  usedHeroIds?: number[]
+  autoGroup?: {
+    sourceVoiceChannelId: string
+    excludedIds: string[]
+  }
 }
 const lastTeams = new Map<string, StoredTeams>()
 
@@ -240,6 +245,50 @@ export class GroupHandler {
       return
     }
 
+    if (interaction.customId === 'group_fearless_prompt') {
+      const stored = lastTeams.get(channelId)
+      if (!stored?.autoGroup) {
+        await interaction.reply({ content: t('group.fearlessUnavailable'), ephemeral: true })
+        return
+      }
+
+      await interaction.reply({
+        content: t('group.fearlessPrompt'),
+        components: GroupHandler._buildFearlessPromptRows([...stored.teamA, ...stored.teamB]),
+        ephemeral: true,
+      })
+      return
+    }
+
+    if (interaction.customId === 'group_fearless_same') {
+      const stored = lastTeams.get(channelId)
+      if (!stored?.autoGroup) {
+        await interaction.update({ content: t('group.fearlessUnavailable'), components: [] })
+        return
+      }
+
+      await interaction.update({ content: t('group.fearlessWorkingSame'), components: [] })
+      await GroupHandler._runFearlessDraft(interaction, stored)
+      return
+    }
+
+    if (interaction.customId.startsWith('group_fearless_avoid_')) {
+      const stored = lastTeams.get(channelId)
+      if (!stored?.autoGroup) {
+        await interaction.update({ content: t('group.fearlessUnavailable'), components: [] })
+        return
+      }
+
+      const avoidMemberId = interaction.customId.replace('group_fearless_avoid_', '')
+      const avoidedMember = [...stored.teamA, ...stored.teamB].find((member) => member.id === avoidMemberId)
+      await interaction.update({
+        content: t('group.fearlessWorkingAvoid', { name: avoidedMember?.name ?? 'player' }),
+        components: [],
+      })
+      await GroupHandler._runFearlessDraft(interaction, stored, avoidMemberId)
+      return
+    }
+
     if (interaction.customId === 'group_reroll_heroes') {
       const stored = lastTeams.get(channelId)
       if (!stored) {
@@ -367,6 +416,112 @@ export class GroupHandler {
     } catch { /* ignore — message may have been deleted */ }
   }
 
+  private static _buildFearlessPromptRows(players: { id: string; name: string }[]) {
+    const rows: ActionRowBuilder<ButtonBuilder>[] = [
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId('group_fearless_same')
+          .setLabel(t('group.fearlessSamePlayers'))
+          .setStyle(ButtonStyle.Success)
+      ),
+    ]
+
+    let currentRow = new ActionRowBuilder<ButtonBuilder>()
+    for (const player of players) {
+      if (currentRow.components.length === 5) {
+        rows.push(currentRow)
+        currentRow = new ActionRowBuilder<ButtonBuilder>()
+      }
+
+      currentRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`group_fearless_avoid_${player.id}`)
+          .setLabel(GroupHandler._truncateButtonLabel(player.name))
+          .setStyle(ButtonStyle.Secondary)
+      )
+    }
+
+    if (currentRow.components.length > 0) {
+      rows.push(currentRow)
+    }
+
+    return rows
+  }
+
+  private static _truncateButtonLabel(label: string, maxLength = 80) {
+    if (label.length <= maxLength) return label
+    return `${label.slice(0, maxLength - 3)}...`
+  }
+
+  private static async _runFearlessDraft(
+    interaction: any,
+    stored: StoredTeams,
+    avoidMemberId?: string
+  ) {
+    const channelId = interaction.channel?.id
+    const currentPlayers = [...stored.teamA, ...stored.teamB]
+    const teamSize = stored.teamA.length as 2 | 4 | 5
+    if (!channelId || currentPlayers.length !== teamSize * 2) return
+
+    let nextPlayers = currentPlayers
+
+    if (avoidMemberId) {
+      const avoidedPlayer = currentPlayers.find((member) => member.id === avoidMemberId)
+      if (!avoidedPlayer) {
+        await interaction.followUp({ content: t('group.noTeamData'), ephemeral: true })
+        return
+      }
+
+      const sourceChannel = interaction.guild?.channels.cache.get(stored.autoGroup!.sourceVoiceChannelId) as any
+      const currentIds = new Set(currentPlayers.map((member) => member.id))
+      const excludedIds = new Set(stored.autoGroup!.excludedIds)
+      const replacementPool = sourceChannel?.members
+        ?.filter((member: GuildMember) =>
+          !member.user.bot &&
+          !excludedIds.has(member.id) &&
+          member.id !== avoidMemberId &&
+          !currentIds.has(member.id)
+        )
+        .map((member: GuildMember) => ({ id: member.id, name: member.displayName })) ?? []
+
+      if (replacementPool.length === 0) {
+        await interaction.followUp({
+          content: t('group.fearlessNoReplacement', { name: avoidedPlayer.name }),
+          ephemeral: true,
+        })
+        return
+      }
+
+      const replacement = GroupHandler._shuffle(replacementPool)[0]
+      nextPlayers = currentPlayers
+        .filter((member) => member.id !== avoidMemberId)
+        .concat(replacement)
+    }
+
+    const usedHeroIds = new Set(stored.usedHeroIds ?? [])
+    const heroes: any[] = require('../assets/data/heroes.json')
+    if (heroes.filter((hero: any) => !usedHeroIds.has(hero.id)).length < nextPlayers.length) {
+      await interaction.followUp({ content: t('group.fearlessNoHeroesLeft'), ephemeral: true })
+      return
+    }
+
+    const shuffledPlayers = GroupHandler._shuffle(nextPlayers)
+    const teamA = shuffledPlayers.slice(0, teamSize)
+    const teamB = shuffledPlayers.slice(teamSize)
+
+    stored.teamA = teamA
+    stored.teamB = teamB
+    const group = activeGroups.get(channelId)
+    if (group) {
+      group.members = shuffledPlayers
+    }
+
+    await GroupHandler._assignHeroesToTeams(interaction, teamA, teamB, {
+      titleKey: 'group.fearlessTitle',
+      blockedHeroIds: usedHeroIds,
+    })
+  }
+
   private static async _randomTeams(interaction: any, group: Group) {
     const shuffled = GroupHandler._shuffle(group.members)
     const half = group.size  // exactly size players per team
@@ -415,9 +570,14 @@ export class GroupHandler {
   private static async _assignHeroesToTeams(
     interaction: any,
     teamA: { id: string; name: string }[],
-    teamB: { id: string; name: string }[]
+    teamB: { id: string; name: string }[],
+    options?: {
+      titleKey?: string
+      blockedHeroIds?: Set<number>
+    }
   ) {
     const heroes: any[] = require('../assets/data/heroes.json')
+    const availableHeroes = heroes.filter((hero: any) => !options?.blockedHeroIds?.has(hero.id))
     const rolesA = ROLES.slice(0, teamA.length)
     const rolesB = ROLES.slice(0, teamB.length)
     const allRoles = rolesA  // same for both teams
@@ -428,7 +588,7 @@ export class GroupHandler {
     let assignB: { member: typeof teamB[0]; role: string; hero: any }[] | null = null
 
     try {
-      const prompt = heroPickPrompt({ size, roles: allRoles, heroPool: heroes })
+      const prompt = heroPickPrompt({ size, roles: allRoles, heroPool: availableHeroes })
       const raw = await askAI(prompt, 300, 0.4)
 
       if (raw) {
@@ -443,7 +603,7 @@ export class GroupHandler {
           ) {
             // Match returned names to hero objects (case-insensitive)
             const findHero = (name: string) =>
-              heroes.find((h: any) =>
+              availableHeroes.find((h: any) =>
                 h.localized_name.toLowerCase() === name.toLowerCase() ||
                 h.name.toLowerCase() === name.toLowerCase()
               )
@@ -476,7 +636,7 @@ export class GroupHandler {
 
       const pickHeroForRole = (roleName: string) => {
         const preferred = ROLE_PREFERRED_HERO_ROLES[roleName] ?? []
-        const available = heroes.filter((h: any) => !usedHeroIds.has(h.id))
+        const available = availableHeroes.filter((h: any) => !usedHeroIds.has(h.id))
         const matching = available.filter((h: any) =>
           h.roles.some((r: string) => preferred.includes(r))
         )
@@ -502,7 +662,7 @@ export class GroupHandler {
         .setThumbnail(heroImg(a.hero.name))
         .setDescription(`**${a.role}** — ${a.member.name}\n↳ **${a.hero.localized_name}**`)
       if (i === 0) {
-        e.setTitle(t('group.btnRandomTeamsHeroes'))
+        e.setTitle(t(options?.titleKey ?? 'group.btnRandomTeamsHeroes'))
         e.setAuthor({ name: `🔵 ${t('group.teamATitle')}` })
       }
       embeds.push(e)
@@ -523,11 +683,27 @@ export class GroupHandler {
     // Reset re-roll votes whenever new heroes are assigned
     rerollVotes.delete(interaction.channel.id)
 
+    const stored = lastTeams.get(interaction.channel.id)
+    if (stored) {
+      const assignedHeroIds = [...assignA!, ...assignB!].map((assignment) => assignment.hero.id)
+      stored.usedHeroIds = Array.from(new Set([...(stored.usedHeroIds ?? []), ...assignedHeroIds]))
+    }
+
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('group_reroll_heroes')
         .setLabel(t('group.btnReroll'))
-        .setStyle(ButtonStyle.Primary),
+        .setStyle(ButtonStyle.Primary)
+    )
+    if (stored?.autoGroup) {
+      actionRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId('group_fearless_prompt')
+          .setLabel(t('group.btnFearless'))
+          .setStyle(ButtonStyle.Danger)
+      )
+    }
+    actionRow.addComponents(
       new ButtonBuilder()
         .setCustomId('group_split_channels')
         .setLabel(t('group.btnMoveChannels'))
@@ -677,7 +853,15 @@ export class GroupHandler {
       channelId,
     }
     activeGroups.set(channelId, group)
-    lastTeams.set(channelId, { teamA, teamB })
+    lastTeams.set(channelId, {
+      teamA,
+      teamB,
+      usedHeroIds: [],
+      autoGroup: {
+        sourceVoiceChannelId: voiceChannel.id,
+        excludedIds: Array.from(excludedIds),
+      },
+    })
 
     const teamsEmbed = new EmbedBuilder()
       .setColor(0x3071f7)
