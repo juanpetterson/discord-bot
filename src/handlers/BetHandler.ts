@@ -88,6 +88,25 @@ export async function fetchDotaNick(steamId: string | undefined, fallback: strin
   }
 }
 
+/**
+ * Force-refreshes the Dota 2 nickname for every player in DISCORD_TO_STEAM,
+ * bypassing the TTL cache. Called daily by PollingJob.
+ */
+export async function refreshAllDotaNicks(): Promise<void> {
+  const cache = loadDotaNicksCache()
+  for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
+    try {
+      const profile = await fetchPlayerProfile(steamId)
+      const nick: string = profile?.profile?.personaname || discordName
+      cache[steamId] = { nick, fetchedAt: Date.now() }
+      console.log(`[DotaNick] Refreshed nick for ${discordName} (${steamId}): ${nick}`)
+    } catch (err) {
+      console.warn(`[DotaNick] Failed to refresh nick for ${discordName} (${steamId}):`, err)
+    }
+  }
+  saveDotaNicksCache(cache)
+}
+
 
 
 // ─── Types ────────────────────────────────────────────────────────────────

@@ -81,6 +81,7 @@ import { BetHandler } from './handlers/BetHandler'
 import { GroupHandler } from './handlers/GroupHandler'
 import { ClipHandler } from './handlers/ClipHandler'
 import { JoinSoundHandler } from './handlers/JoinSoundHandler'
+import { PollingJob } from './handlers/PollingJob'
 
 import { calculateTextWidth } from './utils'
 
@@ -116,6 +117,7 @@ export const client = new Client({
 
 client.once('clientReady', (c: any) => {
   console.log(`Ready! Logged in as ${c.user.tag}`)
+  PollingJob.start(client)
 })
 
 client.on('custom-message', (message: string) => {
@@ -171,14 +173,17 @@ client.on('messageCreate', async (message: Message) => {
 
     // Day Summary: !resumedoday / !resumedolastday / !resumedolastweek
     if (messageContent === '!resumedoday') {
+      PollingJob.setResumeChannel(message.channelId)
       await MatchHandler.daySummary(message, 'today')
       return
     }
     if (messageContent === '!resumedolastday') {
+      PollingJob.setResumeChannel(message.channelId)
       await MatchHandler.daySummary(message, 'yesterday')
       return
     }
     if (messageContent === '!resumedolastweek') {
+      PollingJob.setResumeChannel(message.channelId)
       await MatchHandler.daySummary(message, 'lastweek')
       return
     }
@@ -489,6 +494,7 @@ client.on('interactionCreate', async (interaction) => {
 
   // Resume buttons (!resumedoday / !resumedolastday / !resumedolastweek rerun)
   if (isButtonInteraction && MatchHandler.isResumeButton(interaction.customId)) {
+    if (interaction.channelId) PollingJob.setResumeChannel(interaction.channelId)
     await MatchHandler.handleResumeButton(interaction)
     return
   }
