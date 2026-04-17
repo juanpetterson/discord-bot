@@ -176,8 +176,10 @@
     let wavesurfer = null;
     let regionsPlugin = null;
     let activeRegion = null;
-    let tracks = []; // [{label, url}]
+    let tracks = []; // [{label, url, filename}]
     let currentAudioBuffer = null;
+    let clipChannelId = null;
+    let clipMessageId = null;
 
     const trackSelect = document.getElementById('track-select');
     const btnPreview = document.getElementById('btn-preview');
@@ -235,17 +237,17 @@
 
       try {
         const decoded = JSON.parse(atob(hash.replace(/-/g, '+').replace(/_/g, '/')));
-        const channelId = decoded.c;
-        const messageId = decoded.m;
+        clipChannelId = decoded.c;
+        clipMessageId = decoded.m;
 
-        if (!channelId || !messageId) {
+        if (!clipChannelId || !clipMessageId) {
           infoText.textContent = 'Invalid clip data.';
           return;
         }
 
         infoText.textContent = 'Fetching clip data from Discord...';
 
-        const resp = await fetch('/api/message?c=' + channelId + '&m=' + messageId);
+        const resp = await fetch('/api/message?c=' + clipChannelId + '&m=' + clipMessageId);
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
           infoText.textContent = err.error || 'Failed to fetch clip data.';
@@ -310,7 +312,8 @@
         plugins: [regionsPlugin],
       });
 
-      wavesurfer.load(track.url);
+      const proxyUrl = '/api/proxy?c=' + encodeURIComponent(clipChannelId) + '&m=' + encodeURIComponent(clipMessageId) + '&f=' + encodeURIComponent(track.filename);
+      wavesurfer.load(proxyUrl);
 
       wavesurfer.on('ready', () => {
         waveformLoading.style.display = 'none';
