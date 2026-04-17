@@ -17,3 +17,12 @@ services:
       - .env
     command: ["npm", "run", "start"]
     restart: on-failure
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+    restart: on-failure

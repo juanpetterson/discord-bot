@@ -6,11 +6,19 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  StringSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   type ButtonInteraction,
+  type StringSelectMenuInteraction,
+  type ModalSubmitInteraction,
   type Guild,
   type Message,
+  type TextBasedChannel,
 } from 'discord.js';
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import archiver from 'archiver';
@@ -26,6 +34,21 @@ const PRUNE_INTERVAL_MS = 10_000;
 const SILENCE_TIMEOUT_MS = 2000; // re-subscribe after 2s silence
 const CLIP_COOLDOWN_MS = 30_000; // 30-second cooldown between clips
 const CLIPS_PATH = './src/assets/clips';
+const CLIP_METADATA_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+interface ClipTrack {
+  displayName: string;
+  fileName: string; // just the basename
+}
+
+interface ClipMetadata {
+  clipId: string;
+  clipDir: string;
+  mixedFileName: string;
+  tracks: ClipTrack[];
+  channelId: string;
+  createdAt: number;
+}
 
 /**
  * A speaking session represents a contiguous block of audio from one user.
@@ -45,7 +68,13 @@ interface UserAudioBuffer {
 
 export class ClipHandler {
   static readonly BUTTON_CUSTOM_ID = 'clip_execute';
+  static readonly TRIM_BUTTON_PREFIX = 'clip_trim_';
+  static readonly TRACK_SELECT_PREFIX = 'clip_track_';
+  static readonly TRIM_MODAL_PREFIX = 'clip_modal_';
+  static readonly UPLOAD_BUTTON_PREFIX = 'clip_upload_';
+  static readonly UPLOAD_MODAL_PREFIX = 'clip_uploadm_';
 
+  private static clipMetadataStore: Map<string, ClipMetadata> = new Map();
   private static userBuffers: Map<string, UserAudioBuffer> = new Map();
   private static activeSubscriptions: Map<string, SpeakingSession> = new Map(); // userId -> current session
   private static isRecording = false;
@@ -334,12 +363,47 @@ export class ClipHandler {
 
       const userList = userPcmFiles.map(u => u.displayName).join(', ');
       const filesToSend = [mixedMp3Path, zipPath];
-      const clipButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+
+      // Store clip metadata for trim features
+      const clipId = crypto.randomUUID();
+      const tracks: ClipTrack[] = userPcmFiles.map(u => ({
+        displayName: u.displayName,
+        fileName: path.basename(u.mp3Path),
+      }));
+      const metadata: ClipMetadata = {
+        clipId,
+        clipDir: clipDir,
+        mixedFileName: path.basename(mixedMp3Path),
+        tracks,
+        channelId: message.channel.id,
+        createdAt: Date.now(),
+      };
+      ClipHandler.clipMetadataStore.set(clipId, metadata);
+      ClipHandler.pruneExpiredClips();
+
+      const editorBaseUrl = process.env.CLIP_EDITOR_BASE_URL;
+
+      const buttons = [
         new ButtonBuilder()
           .setCustomId(ClipHandler.BUTTON_CUSTOM_ID)
           .setLabel('CLIP')
-          .setStyle(ButtonStyle.Primary)
-      );
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`${ClipHandler.TRIM_BUTTON_PREFIX}${clipId}`)
+          .setLabel('✂️ Trim')
+          .setStyle(ButtonStyle.Secondary),
+      ];
+
+      if (editorBaseUrl) {
+        buttons.push(
+          new ButtonBuilder()
+            .setLabel('🎛️ Editor')
+            .setStyle(ButtonStyle.Link)
+            .setURL(`${editorBaseUrl}/clips/${clipId}/editor`),
+        );
+      }
+
+      const clipButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
 
       const totalSize = filesToSend.reduce((sum, f) => sum + fs.statSync(f).size, 0);
       const maxSize = 25 * 1024 * 1024;
@@ -547,5 +611,384 @@ export class ClipHandler {
   private static formatTimestamp(date: Date): string {
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+  }
+
+  // ========== Clip Metadata ==========
+
+  private static pruneExpiredClips() {
+    const now = Date.now();
+    for (const [id, meta] of ClipHandler.clipMetadataStore) {
+      if (now - meta.createdAt > CLIP_METADATA_TTL_MS) {
+        ClipHandler.clipMetadataStore.delete(id);
+      }
+    }
+  }
+
+  static getClipMetadata(clipId: string): ClipMetadata | undefined {
+    ClipHandler.pruneExpiredClips();
+    return ClipHandler.clipMetadataStore.get(clipId);
+  }
+
+  // ========== Discord Trim Flow ==========
+
+  static isTrimButton(customId: string): boolean {
+    return customId.startsWith(ClipHandler.TRIM_BUTTON_PREFIX);
+  }
+
+  static isTrackSelect(customId: string): boolean {
+    return customId.startsWith(ClipHandler.TRACK_SELECT_PREFIX);
+  }
+
+  static isTrimModal(customId: string): boolean {
+    return customId.startsWith(ClipHandler.TRIM_MODAL_PREFIX);
+  }
+
+  static async handleTrimButton(interaction: ButtonInteraction) {
+    const clipId = interaction.customId.substring(ClipHandler.TRIM_BUTTON_PREFIX.length);
+    const meta = ClipHandler.getClipMetadata(clipId);
+
+    if (!meta) {
+      await interaction.reply({ content: '⚠️ This clip has expired (10 min TTL). Create a new clip with `!clip`.', ephemeral: true });
+      return;
+    }
+
+    const options = [
+      { label: '🎵 Mixed Audio', value: `mixed::${meta.mixedFileName}` },
+      ...meta.tracks.map(t => ({
+        label: `🎤 ${t.displayName}`,
+        value: `individual::${t.fileName}`,
+      })),
+    ];
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`${ClipHandler.TRACK_SELECT_PREFIX}${clipId}`)
+      .setPlaceholder('Select a track to trim')
+      .addOptions(options.slice(0, 25)); // Discord limit
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+    await interaction.reply({
+      content: '🎵 **Select the track you want to trim:**',
+      components: [row],
+      ephemeral: true,
+    });
+  }
+
+  static async handleTrackSelect(interaction: StringSelectMenuInteraction) {
+    const clipId = interaction.customId.substring(ClipHandler.TRACK_SELECT_PREFIX.length);
+    const selectedValue = interaction.values[0];
+    // Encode track selection into the modal customId (format: clip_modal_<clipId>_<base64(value)>)
+    const encodedTrack = Buffer.from(selectedValue).toString('base64url');
+    const modalId = `${ClipHandler.TRIM_MODAL_PREFIX}${clipId}_${encodedTrack}`;
+
+    const modal = new ModalBuilder()
+      .setCustomId(modalId)
+      .setTitle('✂️ Trim Audio');
+
+    const startInput = new TextInputBuilder()
+      .setCustomId('trim_start')
+      .setLabel('Start Time (mm:ss)')
+      .setPlaceholder('00:00')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(5);
+
+    const endInput = new TextInputBuilder()
+      .setCustomId('trim_end')
+      .setLabel('End Time (mm:ss)')
+      .setPlaceholder('01:00')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(5);
+
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(startInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(endInput),
+    );
+
+    await interaction.showModal(modal);
+  }
+
+  static async handleTrimModal(interaction: ModalSubmitInteraction) {
+    const fullId = interaction.customId.substring(ClipHandler.TRIM_MODAL_PREFIX.length);
+    const underscoreIdx = fullId.indexOf('_');
+    const clipId = fullId.substring(0, underscoreIdx);
+    const encodedTrack = fullId.substring(underscoreIdx + 1);
+
+    const meta = ClipHandler.getClipMetadata(clipId);
+    if (!meta) {
+      await interaction.reply({ content: '⚠️ This clip has expired. Create a new clip with `!clip`.', ephemeral: true });
+      return;
+    }
+
+    const trackValue = Buffer.from(encodedTrack, 'base64url').toString();
+    const [trackType, trackFileName] = trackValue.split('::');
+
+    // Validate trackFileName against metadata
+    const validFiles = [meta.mixedFileName, ...meta.tracks.map(t => t.fileName)];
+    if (!validFiles.includes(trackFileName)) {
+      await interaction.reply({ content: '⚠️ Invalid track selection.', ephemeral: true });
+      return;
+    }
+
+    const startStr = interaction.fields.getTextInputValue('trim_start');
+    const endStr = interaction.fields.getTextInputValue('trim_end');
+
+    const startMs = ClipHandler.parseTimeToMs(startStr);
+    const endMs = ClipHandler.parseTimeToMs(endStr);
+
+    if (startMs === null || endMs === null) {
+      await interaction.reply({ content: '⚠️ Invalid time format. Use `mm:ss` (e.g., `00:10`).', ephemeral: true });
+      return;
+    }
+
+    if (endMs <= startMs) {
+      await interaction.reply({ content: '⚠️ End time must be after start time.', ephemeral: true });
+      return;
+    }
+
+    await interaction.deferReply();
+
+    try {
+      const inputPath = path.join(meta.clipDir, trackFileName);
+      if (!fs.existsSync(inputPath)) {
+        await interaction.editReply('⚠️ Audio file not found. It may have been cleaned up.');
+        return;
+      }
+
+      const trimmedFileName = `trimmed_${path.basename(trackFileName, '.mp3')}_${startStr.replace(':', '-')}_${endStr.replace(':', '-')}.mp3`;
+      const outputPath = path.join(meta.clipDir, trimmedFileName);
+
+      await ClipHandler.trimMp3(inputPath, outputPath, startMs, endMs);
+
+      const trackLabel = trackType === 'mixed' ? 'Mixed Audio' : meta.tracks.find(t => t.fileName === trackFileName)?.displayName || trackFileName;
+
+      // Encode the trimmed file path for the upload button
+      const encodedPath = Buffer.from(outputPath).toString('base64url');
+      const uploadButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${ClipHandler.UPLOAD_BUTTON_PREFIX}${encodedPath}`)
+          .setLabel('💾 Upload as Sound')
+          .setStyle(ButtonStyle.Success),
+      );
+
+      await interaction.editReply({
+        content: `✂️ **Trimmed Clip** — ${trackLabel} (${startStr} → ${endStr})`,
+        files: [outputPath],
+        components: [uploadButton],
+      });
+    } catch (err) {
+      console.error('ClipHandler: Error trimming clip:', err);
+      await interaction.editReply('❌ An error occurred while trimming the clip.');
+    }
+  }
+
+  // ========== API Helpers (for web editor) ==========
+
+  static getClipAudioPath(clipId: string, trackFile: string): string | null {
+    const meta = ClipHandler.getClipMetadata(clipId);
+    if (!meta) return null;
+
+    // Validate trackFile against known files to prevent path traversal
+    const validFiles = [meta.mixedFileName, ...meta.tracks.map(t => t.fileName)];
+    const safeName = path.basename(trackFile);
+    if (!validFiles.includes(safeName)) return null;
+
+    const fullPath = path.join(meta.clipDir, safeName);
+    if (!fs.existsSync(fullPath)) return null;
+    return fullPath;
+  }
+
+  static async trimAndGetPath(clipId: string, trackFile: string, startMs: number, endMs: number): Promise<string | null> {
+    const meta = ClipHandler.getClipMetadata(clipId);
+    if (!meta) return null;
+
+    const validFiles = [meta.mixedFileName, ...meta.tracks.map(t => t.fileName)];
+    const safeName = path.basename(trackFile);
+    if (!validFiles.includes(safeName)) return null;
+
+    const inputPath = path.join(meta.clipDir, safeName);
+    if (!fs.existsSync(inputPath)) return null;
+
+    if (endMs <= startMs || startMs < 0) return null;
+
+    const startStr = ClipHandler.formatMsToTime(startMs);
+    const endStr = ClipHandler.formatMsToTime(endMs);
+    const trimmedFileName = `trimmed_${path.basename(safeName, '.mp3')}_${startStr.replace(':', '-')}_${endStr.replace(':', '-')}.mp3`;
+    const outputPath = path.join(meta.clipDir, trimmedFileName);
+
+    await ClipHandler.trimMp3(inputPath, outputPath, startMs, endMs);
+    return outputPath;
+  }
+
+  static async postTrimmedToChannel(clipId: string, trimmedPath: string, trackLabel: string, startStr: string, endStr: string): Promise<boolean> {
+    const meta = ClipHandler.getClipMetadata(clipId);
+    if (!meta) return false;
+
+    try {
+      const { client } = require('../index');
+      const channel = client.channels.cache.get(meta.channelId) as TextBasedChannel | undefined;
+      if (!channel) return false;
+
+      const encodedPath = Buffer.from(trimmedPath).toString('base64url');
+      const uploadButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${ClipHandler.UPLOAD_BUTTON_PREFIX}${encodedPath}`)
+          .setLabel('💾 Upload as Sound')
+          .setStyle(ButtonStyle.Success),
+      );
+
+      await channel.send({
+        content: `✂️ **Trimmed Clip** — ${trackLabel} (${startStr} → ${endStr})`,
+        files: [trimmedPath],
+        components: [uploadButton],
+      });
+      return true;
+    } catch (err) {
+      console.error('ClipHandler: Error posting trimmed clip:', err);
+      return false;
+    }
+  }
+
+  // ========== Trim Utility ==========
+
+  private static trimMp3(inputPath: string, outputPath: string, startMs: number, endMs: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const ffmpegPath = require('ffmpeg-static');
+      const startSec = startMs / 1000;
+      const endSec = endMs / 1000;
+
+      const ffmpeg = spawn(ffmpegPath, [
+        '-y',
+        '-i', inputPath,
+        '-ss', String(startSec),
+        '-to', String(endSec),
+        '-c', 'copy',
+        outputPath,
+      ]);
+
+      let stderr = '';
+      ffmpeg.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`ffmpeg trim exited with code ${code}: ${stderr}`));
+        }
+      });
+
+      ffmpeg.on('error', (err) => {
+        reject(new Error(`ffmpeg trim spawn error: ${err.message}`));
+      });
+    });
+  }
+
+  private static parseTimeToMs(timeStr: string): number | null {
+    const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const minutes = parseInt(match[1], 10);
+    const seconds = parseInt(match[2], 10);
+    if (seconds >= 60) return null;
+    return (minutes * 60 + seconds) * 1000;
+  }
+
+  private static formatMsToTime(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  // ========== Upload as Sound Flow ==========
+
+  static isUploadButton(customId: string): boolean {
+    return customId.startsWith(ClipHandler.UPLOAD_BUTTON_PREFIX);
+  }
+
+  static isUploadModal(customId: string): boolean {
+    return customId.startsWith(ClipHandler.UPLOAD_MODAL_PREFIX);
+  }
+
+  static async handleUploadButton(interaction: ButtonInteraction) {
+    const encodedPath = interaction.customId.substring(ClipHandler.UPLOAD_BUTTON_PREFIX.length);
+    const filePath = Buffer.from(encodedPath, 'base64url').toString();
+
+    if (!fs.existsSync(filePath)) {
+      await interaction.reply({ content: '⚠️ The trimmed audio file has expired or been deleted.', ephemeral: true });
+      return;
+    }
+
+    const modalId = `${ClipHandler.UPLOAD_MODAL_PREFIX}${encodedPath}`;
+
+    const modal = new ModalBuilder()
+      .setCustomId(modalId)
+      .setTitle('📁 Upload as Sound');
+
+    const authorInput = new TextInputBuilder()
+      .setCustomId('upload_author')
+      .setLabel('Author')
+      .setPlaceholder('e.g. binho')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(50);
+
+    const nameInput = new TextInputBuilder()
+      .setCustomId('upload_name')
+      .setLabel('Sound Name')
+      .setPlaceholder('e.g. funny-moment')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(50);
+
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(authorInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput),
+    );
+
+    await interaction.showModal(modal);
+  }
+
+  static async handleUploadModal(interaction: ModalSubmitInteraction) {
+    const encodedPath = interaction.customId.substring(ClipHandler.UPLOAD_MODAL_PREFIX.length);
+    const sourcePath = Buffer.from(encodedPath, 'base64url').toString();
+
+    if (!fs.existsSync(sourcePath)) {
+      await interaction.reply({ content: '⚠️ The trimmed audio file has expired or been deleted.', ephemeral: true });
+      return;
+    }
+
+    const author = interaction.fields.getTextInputValue('upload_author').trim();
+    const soundName = interaction.fields.getTextInputValue('upload_name').trim();
+
+    if (!author || !soundName) {
+      await interaction.reply({ content: '⚠️ Both Author and Sound Name are required.', ephemeral: true });
+      return;
+    }
+
+    // Sanitize inputs to prevent path traversal
+    const safeAuthor = author.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
+    const safeName = soundName.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
+
+    if (!safeAuthor || !safeName) {
+      await interaction.reply({ content: '⚠️ Author and Sound Name can only contain letters, numbers, spaces, hyphens, and underscores.', ephemeral: true });
+      return;
+    }
+
+    const PREFIX_SEPARATOR = ' - ';
+    const destFileName = `${safeAuthor}${PREFIX_SEPARATOR}${safeName}.mp3`;
+    const destPath = path.join('./src/assets/uploads', destFileName);
+
+    try {
+      fs.copyFileSync(sourcePath, destPath);
+      await interaction.reply({
+        content: `✅ Sound uploaded as **${destFileName}**!\nUse \`!play ${safeName}\` to play it.`,
+      });
+    } catch (err) {
+      console.error('ClipHandler: Error uploading sound:', err);
+      await interaction.reply({ content: '❌ Failed to upload sound.', ephemeral: true });
+    }
   }
 }

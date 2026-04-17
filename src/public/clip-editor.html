@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clip Editor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+    }
+    .container {
+      width: 100%;
+      max-width: 900px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+      color: #5865f2;
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+      border: 1px solid #2a2a4a;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    select, button {
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0f3460;
+      color: #e0e0e0;
+      border: 1px solid #3a3a6a;
+      border-radius: 8px;
+      cursor: pointer;
+      outline: none;
+    }
+    select:focus { border-color: #5865f2; }
+    #waveform {
+      margin: 16px 0;
+      border-radius: 8px;
+      overflow: hidden;
+      min-height: 128px;
+      background: #0d1b3e;
+    }
+    .time-display {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 12px;
+    }
+    .time-box {
+      flex: 1;
+      background: #0f3460;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .time-box .label {
+      font-size: 0.7rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .time-box .value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #fff;
+    }
+    .time-box.start .value { color: #57f287; }
+    .time-box.end .value { color: #ed4245; }
+    .time-box.duration .value { color: #fee75c; }
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-preview {
+      background: #5865f2;
+      color: #fff;
+    }
+    .btn-stop {
+      background: #4f545c;
+      color: #fff;
+    }
+    .btn-download {
+      background: #57f287;
+      color: #1a1a2e;
+    }
+    .btn-post {
+      background: #eb459e;
+      color: #fff;
+    }
+    .btn-upload {
+      background: #f0b132;
+      color: #1a1a2e;
+    }
+    .spacer { flex: 1; }
+    .upload-fields {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .upload-fields input {
+      flex: 1;
+      min-width: 120px;
+      padding: 10px 12px;
+      background: #0f3460;
+      color: #e0e0e0;
+      border: 1px solid #3a3a6a;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .upload-fields input::placeholder { color: #666; }
+    .upload-fields input:focus { border-color: #5865f2; }
+    .status {
+      margin-top: 16px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      display: none;
+    }
+    .status.success { display: block; background: #1a6b3c; color: #57f287; }
+    .status.error { display: block; background: #6b1a1a; color: #ed4245; }
+    .status.info { display: block; background: #1a3a6b; color: #5865f2; }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+    }
+    .loading .spinner {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      border: 3px solid #3a3a6a;
+      border-top-color: #5865f2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hint {
+      font-size: 0.78rem;
+      color: #666;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎛️ Clip Editor</h1>
+    <p class="subtitle" id="expiry-info"></p>
+
+    <div class="card">
+      <label for="track-select">Track</label>
+      <select id="track-select" disabled>
+        <option>Loading...</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <label>Waveform</label>
+      <div id="waveform">
+        <div class="loading" id="waveform-loading">
+          <div class="spinner"></div>
+          <div>Loading audio...</div>
+        </div>
+      </div>
+
+      <div class="time-display">
+        <div class="time-box start">
+          <div class="label">Start</div>
+          <div class="value" id="time-start">00:00.0</div>
+        </div>
+        <div class="time-box end">
+          <div class="label">End</div>
+          <div class="value" id="time-end">00:00.0</div>
+        </div>
+        <div class="time-box duration">
+          <div class="label">Selection</div>
+          <div class="value" id="time-selection">00:00.0</div>
+        </div>
+      </div>
+
+      <p class="hint">Drag the colored region handles to set the trim start and end points.</p>
+    </div>
+
+    <div class="card">
+      <div class="controls">
+        <button class="btn btn-preview" id="btn-preview" disabled>▶ Preview Selection</button>
+        <button class="btn btn-stop" id="btn-stop" disabled>⏹ Stop</button>
+        <div class="spacer"></div>
+        <button class="btn btn-download" id="btn-download" disabled>⬇ Download Trimmed</button>
+        <button class="btn btn-post" id="btn-post" disabled>📨 Cut & Post to Discord</button>
+      </div>
+
+      <div class="upload-fields">
+        <input type="text" id="upload-author" placeholder="Author (e.g. binho)" maxlength="50" />
+        <input type="text" id="upload-name" placeholder="Sound Name (e.g. funny-moment)" maxlength="50" />
+        <button class="btn btn-upload" id="btn-upload" disabled>📁 Upload as Sound</button>
+      </div>
+
+      <div class="status" id="status-msg"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+  <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+  <script>
+    const clipId = window.location.pathname.split('/')[2];
+    let wavesurfer = null;
+    let regionsPlugin = null;
+    let activeRegion = null;
+    let metadata = null;
+
+    const trackSelect = document.getElementById('track-select');
+    const btnPreview = document.getElementById('btn-preview');
+    const btnStop = document.getElementById('btn-stop');
+    const btnDownload = document.getElementById('btn-download');
+    const btnPost = document.getElementById('btn-post');
+    const btnUpload = document.getElementById('btn-upload');
+    const uploadAuthor = document.getElementById('upload-author');
+    const uploadName = document.getElementById('upload-name');
+    const timeStart = document.getElementById('time-start');
+    const timeEnd = document.getElementById('time-end');
+    const timeSelection = document.getElementById('time-selection');
+    const statusMsg = document.getElementById('status-msg');
+    const expiryInfo = document.getElementById('expiry-info');
+    const waveformLoading = document.getElementById('waveform-loading');
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      const ms = Math.floor((sec % 1) * 10);
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${ms}`;
+    }
+
+    function showStatus(msg, type) {
+      statusMsg.textContent = msg;
+      statusMsg.className = 'status ' + type;
+      if (type === 'success' || type === 'info') {
+        setTimeout(() => { statusMsg.className = 'status'; }, 5000);
+      }
+    }
+
+    function updateTimesFromRegion() {
+      if (!activeRegion) return;
+      timeStart.textContent = formatTime(activeRegion.start);
+      timeEnd.textContent = formatTime(activeRegion.end);
+      timeSelection.textContent = formatTime(activeRegion.end - activeRegion.start);
+    }
+
+    async function loadMetadata() {
+      try {
+        const resp = await fetch(`/clips/${clipId}/metadata`);
+        if (!resp.ok) {
+          showStatus('Clip not found or expired. Create a new clip with !clip.', 'error');
+          return;
+        }
+        metadata = await resp.json();
+
+        trackSelect.innerHTML = '';
+        metadata.tracks.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.fileName;
+          opt.textContent = t.label;
+          trackSelect.appendChild(opt);
+        });
+        trackSelect.disabled = false;
+
+        const remaining = Math.max(0, Math.floor((metadata.expiresAt - Date.now()) / 1000));
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        expiryInfo.textContent = `Clip expires in ~${mins}m ${secs}s`;
+
+        loadTrack(metadata.tracks[0].fileName);
+      } catch (err) {
+        showStatus('Failed to load clip data.', 'error');
+      }
+    }
+
+    function loadTrack(fileName) {
+      waveformLoading.style.display = 'block';
+      btnPreview.disabled = true;
+      btnStop.disabled = true;
+      btnDownload.disabled = true;
+      btnPost.disabled = true;
+
+      if (wavesurfer) {
+        wavesurfer.destroy();
+      }
+
+      regionsPlugin = WaveSurfer.Regions.create();
+
+      wavesurfer = WaveSurfer.create({
+        container: '#waveform',
+        waveColor: '#3a3a6a',
+        progressColor: '#5865f2',
+        cursorColor: '#ffffff44',
+        height: 128,
+        barWidth: 2,
+        barGap: 1,
+        barRadius: 2,
+        plugins: [regionsPlugin],
+      });
+
+      wavesurfer.load(`/clips/${clipId}/audio/${fileName}`);
+
+      wavesurfer.on('ready', () => {
+        waveformLoading.style.display = 'none';
+        const duration = wavesurfer.getDuration();
+
+        activeRegion = regionsPlugin.addRegion({
+          start: 0,
+          end: duration,
+          color: 'rgba(88, 101, 242, 0.2)',
+          drag: false,
+          resize: true,
+        });
+
+        updateTimesFromRegion();
+        btnPreview.disabled = false;
+        btnStop.disabled = false;
+        btnDownload.disabled = false;
+        btnPost.disabled = false;
+        btnUpload.disabled = false;
+      });
+
+      regionsPlugin.on('region-updated', (region) => {
+        activeRegion = region;
+        updateTimesFromRegion();
+      });
+
+      wavesurfer.on('error', (err) => {
+        waveformLoading.style.display = 'none';
+        showStatus('Failed to load audio: ' + err, 'error');
+      });
+    }
+
+    trackSelect.addEventListener('change', () => {
+      loadTrack(trackSelect.value);
+    });
+
+    btnPreview.addEventListener('click', () => {
+      if (!activeRegion || !wavesurfer) return;
+      activeRegion.play();
+    });
+
+    btnStop.addEventListener('click', () => {
+      if (wavesurfer) wavesurfer.stop();
+    });
+
+    btnDownload.addEventListener('click', async () => {
+      if (!activeRegion || !metadata) return;
+      btnDownload.disabled = true;
+      showStatus('Trimming audio...', 'info');
+
+      try {
+        const resp = await fetch(`/clips/${clipId}/trim`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackFile: trackSelect.value,
+            startMs: Math.round(activeRegion.start * 1000),
+            endMs: Math.round(activeRegion.end * 1000),
+            postToDiscord: false,
+          }),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          showStatus(err.error || 'Failed to trim.', 'error');
+          btnDownload.disabled = false;
+          return;
+        }
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `trimmed_${trackSelect.value}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showStatus('Download started!', 'success');
+      } catch (err) {
+        showStatus('Network error.', 'error');
+      }
+      btnDownload.disabled = false;
+    });
+
+    btnPost.addEventListener('click', async () => {
+      if (!activeRegion || !metadata) return;
+      btnPost.disabled = true;
+      showStatus('Trimming & posting to Discord...', 'info');
+
+      try {
+        const resp = await fetch(`/clips/${clipId}/trim`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackFile: trackSelect.value,
+            startMs: Math.round(activeRegion.start * 1000),
+            endMs: Math.round(activeRegion.end * 1000),
+            postToDiscord: true,
+          }),
+        });
+
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          showStatus('✅ Trimmed clip posted to Discord!', 'success');
+        } else {
+          showStatus(data.error || 'Failed to post.', 'error');
+        }
+      } catch (err) {
+        showStatus('Network error.', 'error');
+      }
+      btnPost.disabled = false;
+    });
+
+    btnUpload.addEventListener('click', async () => {
+      if (!activeRegion || !metadata) return;
+      const author = uploadAuthor.value.trim();
+      const soundName = uploadName.value.trim();
+      if (!author || !soundName) {
+        showStatus('Please fill in both Author and Sound Name.', 'error');
+        return;
+      }
+      btnUpload.disabled = true;
+      showStatus('Uploading sound...', 'info');
+
+      try {
+        const resp = await fetch(`/clips/${clipId}/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackFile: trackSelect.value,
+            startMs: Math.round(activeRegion.start * 1000),
+            endMs: Math.round(activeRegion.end * 1000),
+            author,
+            soundName,
+          }),
+        });
+
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          showStatus(`✅ ${data.message}`, 'success');
+        } else {
+          showStatus(data.error || 'Failed to upload.', 'error');
+        }
+      } catch (err) {
+        showStatus('Network error.', 'error');
+      }
+      btnUpload.disabled = false;
+    });
+
+    loadMetadata();
+  </script>
+</body>
+</html>

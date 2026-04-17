@@ -492,6 +492,36 @@ client.on('interactionCreate', async (interaction) => {
     return
   }
 
+  // Clip trim button
+  if (isButtonInteraction && ClipHandler.isTrimButton(interaction.customId)) {
+    await ClipHandler.handleTrimButton(interaction)
+    return
+  }
+
+  // Clip track select menu
+  if (interaction.isStringSelectMenu() && ClipHandler.isTrackSelect(interaction.customId)) {
+    await ClipHandler.handleTrackSelect(interaction)
+    return
+  }
+
+  // Clip trim modal
+  if (interaction.isModalSubmit() && ClipHandler.isTrimModal(interaction.customId)) {
+    await ClipHandler.handleTrimModal(interaction)
+    return
+  }
+
+  // Clip upload button
+  if (isButtonInteraction && ClipHandler.isUploadButton(interaction.customId)) {
+    await ClipHandler.handleUploadButton(interaction)
+    return
+  }
+
+  // Clip upload modal
+  if (interaction.isModalSubmit() && ClipHandler.isUploadModal(interaction.customId)) {
+    await ClipHandler.handleUploadModal(interaction)
+    return
+  }
+
   // Resume buttons (!resumedoday / !resumedolastday / !resumedolastweek rerun)
   if (isButtonInteraction && MatchHandler.isResumeButton(interaction.customId)) {
     if (interaction.channelId) PollingJob.setResumeChannel(interaction.channelId)
