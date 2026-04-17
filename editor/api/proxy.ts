@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { verifySignature } from './_verify';
 
 interface VercelRequest extends IncomingMessage {
   query: { [key: string]: string | string[] | undefined };
@@ -15,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { c: channelId, m: messageId, f: filename } = req.query;
+  const { c: channelId, m: messageId, f: filename, s: signature } = req.query;
 
   if (
     !channelId || !messageId || !filename ||
@@ -27,6 +28,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Validate snowflake format
   if (!/^\d{17,20}$/.test(channelId) || !/^\d{17,20}$/.test(messageId)) {
     return res.status(400).json({ error: 'Invalid ID format' });
+  }
+
+  // Verify HMAC signature
+  const sig = typeof signature === 'string' ? signature : undefined;
+  if (!verifySignature(channelId, messageId, sig)) {
+    return res.status(403).json({ error: 'Invalid signature' });
   }
 
   // Validate filename (alphanumeric, dashes, underscores, dots only)

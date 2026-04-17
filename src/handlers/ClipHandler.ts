@@ -409,10 +409,16 @@ export class ClipHandler {
       const editorBaseUrl = process.env.CLIP_EDITOR_BASE_URL;
       if (editorBaseUrl && sentMessage) {
         try {
-          const hashData = Buffer.from(JSON.stringify({
-            c: message.channel.id,
-            m: sentMessage.id,
-          })).toString('base64url');
+          const editorSecret = process.env.CLIP_EDITOR_SECRET;
+          const payload = { c: message.channel.id, m: sentMessage.id };
+          let hashData = Buffer.from(JSON.stringify(payload)).toString('base64url');
+          if (editorSecret) {
+            const sig = crypto.createHmac('sha256', editorSecret)
+              .update(`${payload.c}:${payload.m}`)
+              .digest('hex')
+              .slice(0, 16);
+            hashData = Buffer.from(JSON.stringify({ ...payload, s: sig })).toString('base64url');
+          }
           const editorUrl = `${editorBaseUrl}#${hashData}`;
 
           if (editorUrl.length <= 512) {
