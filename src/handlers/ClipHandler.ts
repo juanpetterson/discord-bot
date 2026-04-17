@@ -75,6 +75,7 @@ export class ClipHandler {
   static readonly UPLOAD_MODAL_PREFIX = 'clip_uploadm_';
 
   private static clipMetadataStore: Map<string, ClipMetadata> = new Map();
+  private static trimmedFileStore: Map<string, string> = new Map(); // shortId -> filePath
   private static userBuffers: Map<string, UserAudioBuffer> = new Map();
   private static activeSubscriptions: Map<string, SpeakingSession> = new Map(); // userId -> current session
   private static isRecording = false;
@@ -763,11 +764,11 @@ export class ClipHandler {
 
       const trackLabel = trackType === 'mixed' ? 'Mixed Audio' : meta.tracks.find(t => t.fileName === trackFileName)?.displayName || trackFileName;
 
-      // Encode the trimmed file path for the upload button
-      const encodedPath = Buffer.from(outputPath).toString('base64url');
+      const trimId = crypto.randomUUID();
+      ClipHandler.trimmedFileStore.set(trimId, outputPath);
       const uploadButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setCustomId(`${ClipHandler.UPLOAD_BUTTON_PREFIX}${encodedPath}`)
+          .setCustomId(`${ClipHandler.UPLOAD_BUTTON_PREFIX}${trimId}`)
           .setLabel('💾 Upload as Sound')
           .setStyle(ButtonStyle.Success),
       );
@@ -830,10 +831,11 @@ export class ClipHandler {
       const channel = client.channels.cache.get(meta.channelId) as TextBasedChannel | undefined;
       if (!channel) return false;
 
-      const encodedPath = Buffer.from(trimmedPath).toString('base64url');
+      const trimId = crypto.randomUUID();
+      ClipHandler.trimmedFileStore.set(trimId, trimmedPath);
       const uploadButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setCustomId(`${ClipHandler.UPLOAD_BUTTON_PREFIX}${encodedPath}`)
+          .setCustomId(`${ClipHandler.UPLOAD_BUTTON_PREFIX}${trimId}`)
           .setLabel('💾 Upload as Sound')
           .setStyle(ButtonStyle.Success),
       );
@@ -913,15 +915,15 @@ export class ClipHandler {
   }
 
   static async handleUploadButton(interaction: ButtonInteraction) {
-    const encodedPath = interaction.customId.substring(ClipHandler.UPLOAD_BUTTON_PREFIX.length);
-    const filePath = Buffer.from(encodedPath, 'base64url').toString();
+    const trimId = interaction.customId.substring(ClipHandler.UPLOAD_BUTTON_PREFIX.length);
+    const filePath = ClipHandler.trimmedFileStore.get(trimId);
 
-    if (!fs.existsSync(filePath)) {
+    if (!filePath || !fs.existsSync(filePath)) {
       await interaction.reply({ content: '⚠️ The trimmed audio file has expired or been deleted.', ephemeral: true });
       return;
     }
 
-    const modalId = `${ClipHandler.UPLOAD_MODAL_PREFIX}${encodedPath}`;
+    const modalId = `${ClipHandler.UPLOAD_MODAL_PREFIX}${trimId}`;
 
     const modal = new ModalBuilder()
       .setCustomId(modalId)
@@ -952,10 +954,10 @@ export class ClipHandler {
   }
 
   static async handleUploadModal(interaction: ModalSubmitInteraction) {
-    const encodedPath = interaction.customId.substring(ClipHandler.UPLOAD_MODAL_PREFIX.length);
-    const sourcePath = Buffer.from(encodedPath, 'base64url').toString();
+    const trimId = interaction.customId.substring(ClipHandler.UPLOAD_MODAL_PREFIX.length);
+    const sourcePath = ClipHandler.trimmedFileStore.get(trimId);
 
-    if (!fs.existsSync(sourcePath)) {
+    if (!sourcePath || !fs.existsSync(sourcePath)) {
       await interaction.reply({ content: '⚠️ The trimmed audio file has expired or been deleted.', ephemeral: true });
       return;
     }
