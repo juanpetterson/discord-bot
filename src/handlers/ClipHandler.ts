@@ -76,6 +76,7 @@ export class ClipHandler {
 
   private static clipMetadataStore: Map<string, ClipMetadata> = new Map();
   private static trimmedFileStore: Map<string, string> = new Map(); // shortId -> filePath
+  private static trimModalStore: Map<string, { clipId: string; trackValue: string }> = new Map();
   private static userBuffers: Map<string, UserAudioBuffer> = new Map();
   private static activeSubscriptions: Map<string, SpeakingSession> = new Map(); // userId -> current session
   private static isRecording = false;
@@ -678,9 +679,9 @@ export class ClipHandler {
   static async handleTrackSelect(interaction: StringSelectMenuInteraction) {
     const clipId = interaction.customId.substring(ClipHandler.TRACK_SELECT_PREFIX.length);
     const selectedValue = interaction.values[0];
-    // Encode track selection into the modal customId (format: clip_modal_<clipId>_<base64(value)>)
-    const encodedTrack = Buffer.from(selectedValue).toString('base64url');
-    const modalId = `${ClipHandler.TRIM_MODAL_PREFIX}${clipId}_${encodedTrack}`;
+    const trimModalId = crypto.randomUUID();
+    ClipHandler.trimModalStore.set(trimModalId, { clipId, trackValue: selectedValue });
+    const modalId = `${ClipHandler.TRIM_MODAL_PREFIX}${trimModalId}`;
 
     const modal = new ModalBuilder()
       .setCustomId(modalId)
@@ -711,18 +712,21 @@ export class ClipHandler {
   }
 
   static async handleTrimModal(interaction: ModalSubmitInteraction) {
-    const fullId = interaction.customId.substring(ClipHandler.TRIM_MODAL_PREFIX.length);
-    const underscoreIdx = fullId.indexOf('_');
-    const clipId = fullId.substring(0, underscoreIdx);
-    const encodedTrack = fullId.substring(underscoreIdx + 1);
+    const trimModalId = interaction.customId.substring(ClipHandler.TRIM_MODAL_PREFIX.length);
+    const stored = ClipHandler.trimModalStore.get(trimModalId);
+
+    if (!stored) {
+      await interaction.reply({ content: '⚠️ This trim session has expired. Please start again.', ephemeral: true });
+      return;
+    }
+
+    const { clipId, trackValue } = stored;
 
     const meta = ClipHandler.getClipMetadata(clipId);
     if (!meta) {
       await interaction.reply({ content: '⚠️ This clip has expired. Create a new clip with `!clip`.', ephemeral: true });
       return;
     }
-
-    const trackValue = Buffer.from(encodedTrack, 'base64url').toString();
     const [trackType, trackFileName] = trackValue.split('::');
 
     // Validate trackFileName against metadata
