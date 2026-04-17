@@ -358,13 +358,8 @@ export class ClipHandler {
         fs.unlinkSync(entry.pcmPath);
       }
 
-      // Create ZIP of individual user MP3 files
-      const userMp3Paths = userPcmFiles.map(u => u.mp3Path);
-      const zipPath = path.join(clipDir, `individual_${timestamp}.zip`);
-      await ClipHandler.createZip(userMp3Paths, zipPath);
-
       const userList = userPcmFiles.map(u => u.displayName).join(', ');
-      const filesToSend = [mixedMp3Path, zipPath];
+      const filesToSend = [mixedMp3Path, ...userPcmFiles.map(u => u.mp3Path)];
 
       // Store clip metadata for trim features
       const clipId = crypto.randomUUID();
@@ -383,29 +378,16 @@ export class ClipHandler {
       ClipHandler.clipMetadataStore.set(clipId, metadata);
       ClipHandler.pruneExpiredClips();
 
-      const editorBaseUrl = process.env.CLIP_EDITOR_BASE_URL;
+      const clipButton = new ButtonBuilder()
+        .setCustomId(ClipHandler.BUTTON_CUSTOM_ID)
+        .setLabel('CLIP')
+        .setStyle(ButtonStyle.Primary);
+      const trimButton = new ButtonBuilder()
+        .setCustomId(`${ClipHandler.TRIM_BUTTON_PREFIX}${clipId}`)
+        .setLabel('✂️ Trim')
+        .setStyle(ButtonStyle.Secondary);
 
-      const buttons = [
-        new ButtonBuilder()
-          .setCustomId(ClipHandler.BUTTON_CUSTOM_ID)
-          .setLabel('CLIP')
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setCustomId(`${ClipHandler.TRIM_BUTTON_PREFIX}${clipId}`)
-          .setLabel('✂️ Trim')
-          .setStyle(ButtonStyle.Secondary),
-      ];
-
-      if (editorBaseUrl) {
-        buttons.push(
-          new ButtonBuilder()
-            .setLabel('🎛️ Editor')
-            .setStyle(ButtonStyle.Link)
-            .setURL(`${editorBaseUrl}/clips/${clipId}/editor`),
-        );
-      }
-
-      const clipButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
+      const clipButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(clipButton, trimButton);
 
       const totalSize = filesToSend.reduce((sum, f) => sum + fs.statSync(f).size, 0);
       const maxSize = 25 * 1024 * 1024;
@@ -417,11 +399,34 @@ export class ClipHandler {
         return;
       }
 
-      await message.channel.send({
-        content: `🎙️ **Voice Clip** (last 60 seconds)\n👥 **Recorded:** ${userList}\n📁 Mixed MP3 + ZIP with individual tracks`,
+      const sentMessage = await message.channel.send({
+        content: `🎙️ **Voice Clip** (last 60 seconds)\n👥 **Recorded:** ${userList}\n📁 Mixed MP3 + individual tracks`,
         files: filesToSend,
         components: [clipButtonRow],
       });
+
+      // Add Editor button if Vercel editor URL is configured
+      const editorBaseUrl = process.env.CLIP_EDITOR_BASE_URL;
+      if (editorBaseUrl && sentMessage) {
+        try {
+          const hashData = Buffer.from(JSON.stringify({
+            c: message.channel.id,
+            m: sentMessage.id,
+          })).toString('base64url');
+          const editorUrl = `${editorBaseUrl}#${hashData}`;
+
+          if (editorUrl.length <= 512) {
+            const editorButton = new ButtonBuilder()
+              .setLabel('🎛️ Editor')
+              .setStyle(ButtonStyle.Link)
+              .setURL(editorUrl);
+            const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(clipButton, trimButton, editorButton);
+            await sentMessage.edit({ components: [updatedRow] });
+          }
+        } catch (err) {
+          console.error('ClipHandler: Failed to add editor button:', err);
+        }
+      }
 
       await statusMsg.delete().catch(() => {});
 
