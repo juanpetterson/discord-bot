@@ -8,5 +8,6 @@ export default defineConfig({
   loader: {
     '.mpeg': 'file',
     '.json': 'json',
+    '.html': 'copy',
   },
 });
