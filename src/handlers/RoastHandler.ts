@@ -1,5 +1,5 @@
 import { Message, EmbedBuilder, GuildMember } from 'discord.js'
-import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
+import { DISCORD_TO_STEAM, fetchDotaNick } from './PlayerData'
 import { MatchHandler, LastMatchFull } from './MatchHandler'
 import { t, LANG } from '../i18n'
 import { askAI, roastPrompt, roastLastMatchPrompt } from '../ai'

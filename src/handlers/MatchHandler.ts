@@ -7,7 +7,7 @@ import {
   ButtonInteraction,
   ButtonStyle,
 } from 'discord.js'
-import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
+import { DISCORD_TO_STEAM, fetchDotaNick } from './PlayerData'
 import { t, LANG } from '../i18n'
 import { askAI, matchCommentaryPrompt } from '../ai'
 

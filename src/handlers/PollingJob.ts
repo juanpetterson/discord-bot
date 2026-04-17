@@ -1,7 +1,7 @@
 import fs from 'fs'
 import https from 'https'
 import { Client, EmbedBuilder, TextChannel } from 'discord.js'
-import { DISCORD_TO_STEAM, fetchDotaNick, refreshAllDotaNicks } from './BetHandler'
+import { DISCORD_TO_STEAM, fetchDotaNick, refreshAllDotaNicks } from './PlayerData'
 
 const STATE_FILE = './src/assets/data/polling-state.json'
 const OPENDOTA_API = 'https://api.opendota.com/api'
@@ -102,6 +102,9 @@ export class PollingJob {
 
     console.log('[PollingJob] Started — resumeChannel:', PollingJob.state.resumeChannelId ?? '(none)')
     console.log('[PollingJob] Tracked players:', Object.keys(PollingJob.state.seenMatchIds).length)
+    console.log('[PollingJob] State file path (resolved):', require('path').resolve(STATE_FILE))
+    console.log('[PollingJob] State file exists:', fs.existsSync(STATE_FILE))
+    console.log('[PollingJob] DISCORD_TO_STEAM entries:', Object.keys(DISCORD_TO_STEAM).length)
 
     // Seed match IDs for any newly added players (without posting) after 10 s
     setTimeout(() => PollingJob.initializeNewPlayers(), 10_000)
@@ -123,10 +126,11 @@ export class PollingJob {
    * the right channel to post automated notifications to.
    */
   static setResumeChannel(channelId: string): void {
+    console.log(`[PollingJob] setResumeChannel called with: ${channelId} (current: ${PollingJob.state.resumeChannelId ?? '(null)'})`)
     if (PollingJob.state.resumeChannelId === channelId) return
     PollingJob.state.resumeChannelId = channelId
     saveState(PollingJob.state)
-    console.log(`[PollingJob] Resume channel updated: ${channelId}`)
+    console.log(`[PollingJob] Resume channel updated and saved: ${channelId}`)
   }
 
   // ── Private ──────────────────────────────────────────────────────────────
@@ -167,10 +171,12 @@ export class PollingJob {
    * new matches are found.
    */
   private static async checkNewMatches(client: Client): Promise<void> {
-    console.log('[PollingJob] Checking for new matches...')
+    console.log('[PollingJob] Checking for new matches at', new Date().toISOString())
+    console.log('[PollingJob] Current resumeChannelId:', PollingJob.state.resumeChannelId ?? '(null)')
+    console.log('[PollingJob] Tracked steam IDs:', Object.keys(PollingJob.state.seenMatchIds).join(', ') || '(none)')
 
     if (!PollingJob.state.resumeChannelId) {
-      console.log('[PollingJob] No resume channel configured — skipping')
+      console.log('[PollingJob] No resume channel configured — skipping. Use a !resume command first to set it.')
       return
     }
 
@@ -198,6 +204,8 @@ export class PollingJob {
 
           const knownIds = new Set<number>(PollingJob.state.seenMatchIds[steamId] ?? [])
           const newMatches = recent.filter((m) => !knownIds.has(m.match_id))
+
+          console.log(`[PollingJob] ${discordName} (${steamId}): ${recent.length} recent, ${knownIds.size} known, ${newMatches.length} new`)
 
           // Always update the seen IDs to the latest snapshot
           PollingJob.state.seenMatchIds[steamId] = recent.map((m) => m.match_id)
@@ -233,16 +241,7 @@ export class PollingJob {
         return
       }
 
-      // Post to the resume channel
-      const channel = client.channels.cache.get(
-        PollingJob.state.resumeChannelId
-      ) as TextChannel | undefined
-
-      if (!channel) {
-        console.warn(`[PollingJob] Channel ${PollingJob.state.resumeChannelId} not in cache — skipping`)
-        return
-      }
-
+      // Build embed
       const lines = newMatchesByPlayer.map(({ name, matches }) => {
         const wins = matches.filter((m) => m.won).length
         const losses = matches.length - wins
@@ -267,6 +266,27 @@ export class PollingJob {
         .setTimestamp()
         .setFooter({ text: 'Automatic match tracker • checks every 30 min' })
 
+      // Post to the resume channel
+      let channel = client.channels.cache.get(
+        PollingJob.state.resumeChannelId
+      ) as TextChannel | undefined
+
+      if (!channel) {
+        console.warn(`[PollingJob] Channel ${PollingJob.state.resumeChannelId} not in cache — trying to fetch...`)
+        try {
+          const fetched = await client.channels.fetch(PollingJob.state.resumeChannelId)
+          if (fetched && fetched.isTextBased()) {
+            channel = fetched as TextChannel
+          } else {
+            console.error(`[PollingJob] Could not fetch channel ${PollingJob.state.resumeChannelId} — skipping`)
+            return
+          }
+        } catch (fetchErr) {
+          console.error(`[PollingJob] Failed to fetch channel ${PollingJob.state.resumeChannelId}:`, fetchErr)
+          return
+        }
+      }
+
       await channel.send({ embeds: [embed] })
       console.log(`[PollingJob] Posted match notification for ${newMatchesByPlayer.length} player(s)`)
     } catch (err) {
@@ -276,12 +296,15 @@ export class PollingJob {
 
   /** Force-refresh all Dota nicknames and persist the timestamp. */
   private static async runNickRefresh(): Promise<void> {
-    console.log('[PollingJob] Refreshing Dota nicknames for all players...')
+    const lastRefreshAgo = PollingJob.state.lastNickRefresh
+      ? `${((Date.now() - PollingJob.state.lastNickRefresh) / 3600000).toFixed(1)}h ago`
+      : 'never'
+    console.log(`[PollingJob] Starting nickname refresh (last refresh: ${lastRefreshAgo})`)
     try {
       await refreshAllDotaNicks()
       PollingJob.state.lastNickRefresh = Date.now()
       saveState(PollingJob.state)
-      console.log('[PollingJob] Nickname refresh complete')
+      console.log(`[PollingJob] Nickname refresh complete — next in 24h. State saved with lastNickRefresh=${PollingJob.state.lastNickRefresh}`)
     } catch (err) {
       console.error('[PollingJob] Error refreshing nicknames:', err)
     }
