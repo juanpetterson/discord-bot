@@ -7,7 +7,7 @@ import {
   ButtonInteraction,
   ButtonStyle,
 } from 'discord.js'
-import { DISCORD_TO_STEAM, fetchDotaNick } from './BetHandler'
+import { DISCORD_TO_STEAM, fetchDotaNick } from './PlayerData'
 import { t, LANG } from '../i18n'
 import { askAI, matchCommentaryPrompt } from '../ai'
 
@@ -1112,6 +1112,8 @@ export class MatchHandler {
         const dayMatches = recent.filter(m => {
           return m.start_time >= dayStartUnix && m.start_time <= dayEndUnix
         })
+
+        console.log(`[DaySummary] ${playerName} (${steamId}): ${recent.length} recent, ${dayMatches.length} in range [${dayStartUnix}–${dayEndUnix}]${dayMatches.length > 0 ? ' match_ids=' + dayMatches.map(m => m.match_id).join(',') : ''}`)
 
         if (dayMatches.length === 0) continue
 

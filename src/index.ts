@@ -166,6 +166,28 @@ client.on(Events.VoiceStateUpdate, async (oldState: VoiceState, newState: VoiceS
 client.on('messageCreate', async (message: Message) => {
   console.log('DEBUG message received')
   try {
+    // Handle sound uploads from web editor
+    if (
+      message.author.id === client.user?.id &&
+      message.content.startsWith('🔊 **Sound Upload**') &&
+      message.attachments.size > 0
+    ) {
+      const attachment = message.attachments.first()!;
+      const fileName = attachment.name || 'unknown.wav';
+      try {
+        await downloadMP3(
+          { url: attachment.url, name: fileName },
+          './src/assets/uploads',
+          fileName.replace(/\.[^.]+$/, '')
+        );
+        await message.edit(`✅ **Sound Uploaded**\n📁 \`${fileName}\``);
+      } catch (err) {
+        console.error('Web editor upload save error:', err);
+        await message.edit(`❌ **Upload Failed**\n📁 \`${fileName}\``).catch(() => {});
+      }
+      return;
+    }
+
     const commandHandler = new CommandHandler()
     const messageContent = message.content.toLowerCase()
 

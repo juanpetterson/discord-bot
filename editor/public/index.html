@@ -109,7 +109,42 @@
     .btn-preview { background: #5865f2; color: #fff; }
     .btn-stop { background: #4f545c; color: #fff; }
     .btn-download { background: #57f287; color: #1a1a2e; }
+    .btn-upload { background: #5865f2; color: #fff; }
     .spacer { flex: 1; }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: #16213e;
+      border: 1px solid #2a2a4a;
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .modal h3 { margin-bottom: 16px; color: #5865f2; }
+    .modal input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0f3460;
+      color: #e0e0e0;
+      border: 1px solid #3a3a6a;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      outline: none;
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    .modal input[type="text"]:focus { border-color: #5865f2; }
+    .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+    .btn-cancel { background: #4f545c; color: #fff; }
     .status {
       margin-top: 16px;
       padding: 10px 14px;
@@ -178,9 +213,24 @@
         <button class="btn btn-preview" id="btn-preview" disabled>▶ Preview Selection</button>
         <button class="btn btn-stop" id="btn-stop" disabled>⏹ Stop</button>
         <div class="spacer"></div>
+        <button class="btn btn-upload" id="btn-upload" disabled>⬆ Upload as Sound</button>
         <button class="btn btn-download" id="btn-download" disabled>⬇ Download Trimmed</button>
       </div>
       <div class="status" id="status-msg"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="upload-modal">
+    <div class="modal">
+      <h3>⬆ Upload as Sound</h3>
+      <label for="upload-author">Author</label>
+      <input type="text" id="upload-author" placeholder="e.g. dw" maxlength="50">
+      <label for="upload-name">Sound Name</label>
+      <input type="text" id="upload-name" placeholder="e.g. tananana nananan" maxlength="100">
+      <div class="modal-buttons">
+        <button class="btn btn-cancel" id="upload-cancel">Cancel</button>
+        <button class="btn btn-upload" id="upload-confirm">Upload</button>
+      </div>
     </div>
   </div>
 
@@ -190,13 +240,22 @@
     let wavesurfer = null;
     let regionsPlugin = null;
     let activeRegion = null;
-    let tracks = []; // [{label, url}]
+    let tracks = []; // [{label, url, filename}]
     let currentAudioBuffer = null;
+    let clipChannelId = null;
+    let clipMessageId = null;
+    let clipSignature = null;
 
     const trackSelect = document.getElementById('track-select');
     const btnPreview = document.getElementById('btn-preview');
     const btnStop = document.getElementById('btn-stop');
     const btnDownload = document.getElementById('btn-download');
+    const btnUpload = document.getElementById('btn-upload');
+    const uploadModal = document.getElementById('upload-modal');
+    const uploadAuthor = document.getElementById('upload-author');
+    const uploadName = document.getElementById('upload-name');
+    const uploadCancel = document.getElementById('upload-cancel');
+    const uploadConfirm = document.getElementById('upload-confirm');
     const timeStart = document.getElementById('time-start');
     const timeEnd = document.getElementById('time-end');
     const timeSelection = document.getElementById('time-selection');
@@ -274,17 +333,20 @@
 
       try {
         const decoded = JSON.parse(atob(hash.replace(/-/g, '+').replace(/_/g, '/')));
-        const channelId = decoded.c;
-        const messageId = decoded.m;
+        clipChannelId = decoded.c;
+        clipMessageId = decoded.m;
+        clipSignature = decoded.s || null;
 
-        if (!channelId || !messageId) {
+        if (!clipChannelId || !clipMessageId) {
           infoText.textContent = 'Invalid clip data.';
           return;
         }
 
         infoText.textContent = 'Fetching clip data from Discord...';
 
-        const resp = await fetch('/api/message?c=' + channelId + '&m=' + messageId);
+        let apiUrl = '/api/message?c=' + clipChannelId + '&m=' + clipMessageId;
+        if (clipSignature) apiUrl += '&s=' + encodeURIComponent(clipSignature);
+        const resp = await fetch(apiUrl);
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
           infoText.textContent = err.error || 'Failed to fetch clip data.';
@@ -329,6 +391,7 @@
       btnPreview.disabled = true;
       btnStop.disabled = true;
       btnDownload.disabled = true;
+      btnUpload.disabled = true;
       currentAudioBuffer = null;
 
       if (wavesurfer) {
@@ -349,7 +412,9 @@
         plugins: [regionsPlugin],
       });
 
-      wavesurfer.load(track.url);
+      let proxyUrl = '/api/proxy?c=' + encodeURIComponent(clipChannelId) + '&m=' + encodeURIComponent(clipMessageId) + '&f=' + encodeURIComponent(track.filename);
+      if (clipSignature) proxyUrl += '&s=' + encodeURIComponent(clipSignature);
+      wavesurfer.load(proxyUrl);
 
       wavesurfer.on('ready', () => {
         waveformLoading.style.display = 'none';
@@ -367,6 +432,7 @@
         btnPreview.disabled = false;
         btnStop.disabled = false;
         btnDownload.disabled = false;
+        btnUpload.disabled = false;
 
         // Store decoded audio buffer for WAV export
         currentAudioBuffer = wavesurfer.getDecodedData();
@@ -480,6 +546,112 @@
       }
 
       btnDownload.disabled = false;
+    });
+
+    // Upload flow
+    btnUpload.addEventListener('click', () => {
+      uploadModal.classList.add('active');
+      uploadAuthor.focus();
+    });
+
+    uploadCancel.addEventListener('click', () => {
+      uploadModal.classList.remove('active');
+    });
+
+    uploadModal.addEventListener('click', (e) => {
+      if (e.target === uploadModal) uploadModal.classList.remove('active');
+    });
+
+    uploadConfirm.addEventListener('click', async () => {
+      const author = uploadAuthor.value.trim();
+      const name = uploadName.value.trim();
+
+      if (!author || !name) {
+        showStatus('Please fill in both Author and Sound Name.', 'error');
+        return;
+      }
+
+      if (!activeRegion || !currentAudioBuffer) {
+        showStatus('No audio loaded.', 'error');
+        return;
+      }
+
+      uploadConfirm.disabled = true;
+      uploadModal.classList.remove('active');
+      showStatus('Uploading sound...', 'info');
+
+      try {
+        // Build WAV buffer (same logic as download)
+        const sampleRate = currentAudioBuffer.sampleRate;
+        const numChannels = currentAudioBuffer.numberOfChannels;
+        const startSample = Math.floor(activeRegion.start * sampleRate);
+        const endSample = Math.min(Math.floor(activeRegion.end * sampleRate), currentAudioBuffer.length);
+        const numSamples = endSample - startSample;
+
+        if (numSamples <= 0) {
+          showStatus('Invalid selection.', 'error');
+          uploadConfirm.disabled = false;
+          return;
+        }
+
+        const pcm = new Int16Array(numSamples * numChannels);
+        for (let ch = 0; ch < numChannels; ch++) {
+          const channelData = currentAudioBuffer.getChannelData(ch);
+          for (let i = 0; i < numSamples; i++) {
+            const sample = Math.max(-1, Math.min(1, channelData[startSample + i]));
+            pcm[i * numChannels + ch] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+          }
+        }
+
+        const wavBuffer = new ArrayBuffer(44 + pcm.byteLength);
+        const view = new DataView(wavBuffer);
+        function writeStr(offset, str) {
+          for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+        }
+        writeStr(0, 'RIFF');
+        view.setUint32(4, 36 + pcm.byteLength, true);
+        writeStr(8, 'WAVE');
+        writeStr(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numChannels * 2, true);
+        view.setUint16(32, numChannels * 2, true);
+        view.setUint16(34, 16, true);
+        writeStr(36, 'data');
+        view.setUint32(40, pcm.byteLength, true);
+        new Uint8Array(wavBuffer).set(new Uint8Array(pcm.buffer), 44);
+
+        // Convert to base64
+        const bytes = new Uint8Array(wavBuffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const audioBase64 = btoa(binary);
+
+        let uploadUrl = '/api/upload?c=' + encodeURIComponent(clipChannelId) + '&m=' + encodeURIComponent(clipMessageId);
+        if (clipSignature) uploadUrl += '&s=' + encodeURIComponent(clipSignature);
+
+        const resp = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ author, soundName: name, audioBase64 }),
+        });
+
+        const data = await resp.json();
+        if (!resp.ok) {
+          showStatus(data.error || 'Upload failed.', 'error');
+        } else {
+          showStatus('Sound uploaded as: ' + (data.fileName || name), 'success');
+          uploadAuthor.value = '';
+          uploadName.value = '';
+        }
+      } catch (err) {
+        console.error('Upload error:', err);
+        showStatus('Failed to upload sound.', 'error');
+      }
+
+      uploadConfirm.disabled = false;
     });
 
     init();
