@@ -97,6 +97,20 @@
     .time-box.start .value { color: #57f287; }
     .time-box.end .value { color: #ed4245; }
     .time-box.duration .value { color: #fee75c; }
+    input.time-input {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      outline: none;
+      text-align: center;
+      width: 100%;
+      padding: 0;
+      cursor: text;
+      transition: border-color 0.15s;
+    }
+    .time-box.start input.time-input:focus { border-bottom-color: #57f287; }
+    .time-box.end input.time-input:focus { border-bottom-color: #ed4245; }
+    input.time-input:hover { border-bottom-color: #555; }
     .controls {
       display: flex;
       gap: 12px;
@@ -213,11 +227,11 @@
       <div class="time-display">
         <div class="time-box start">
           <div class="label">Start</div>
-          <div class="value" id="time-start">00:00.0</div>
+          <input class="value time-input" id="time-start" type="text" value="00:00.0" spellcheck="false" />
         </div>
         <div class="time-box end">
           <div class="label">End</div>
-          <div class="value" id="time-end">00:00.0</div>
+          <input class="value time-input" id="time-end" type="text" value="00:00.0" spellcheck="false" />
         </div>
         <div class="time-box duration">
           <div class="label">Selection</div>
@@ -225,7 +239,7 @@
         </div>
       </div>
 
-      <p class="hint">Drag the colored region handles to set the trim start and end points.</p>
+      <p class="hint">Drag handles or type a time (MM:SS.D) to set trim points.</p>
     </div>
 
     <div class="card">
@@ -288,10 +302,46 @@
 
     function updateTimesFromRegion() {
       if (!activeRegion) return;
-      timeStart.textContent = formatTime(activeRegion.start);
-      timeEnd.textContent = formatTime(activeRegion.end);
+      timeStart.value = formatTime(activeRegion.start);
+      timeEnd.value = formatTime(activeRegion.end);
       timeSelection.textContent = formatTime(activeRegion.end - activeRegion.start);
     }
+
+    function parseTime(str) {
+      const match = str.trim().match(/^(\d+):(\d{2})\.(\d)$/);
+      if (!match) return null;
+      return parseInt(match[1], 10) * 60 + parseInt(match[2], 10) + parseInt(match[3], 10) / 10;
+    }
+
+    function applyTimeInput(isStart) {
+      if (!activeRegion || !wavesurfer) return;
+      const input = isStart ? timeStart : timeEnd;
+      const secs = parseTime(input.value);
+      if (secs === null) {
+        updateTimesFromRegion();
+        return;
+      }
+      const duration = wavesurfer.getDuration();
+      if (isStart) {
+        const newStart = Math.max(0, Math.min(secs, activeRegion.end - 0.1));
+        activeRegion.setOptions({ start: newStart });
+      } else {
+        const newEnd = Math.max(activeRegion.start + 0.1, Math.min(secs, duration));
+        activeRegion.setOptions({ end: newEnd });
+      }
+      updateTimesFromRegion();
+    }
+
+    function addTimeInputListeners(input, isStart) {
+      input.addEventListener('blur', () => applyTimeInput(isStart));
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); applyTimeInput(isStart); input.blur(); }
+        if (e.key === 'Escape') { updateTimesFromRegion(); input.blur(); }
+      });
+    }
+
+    addTimeInputListeners(timeStart, true);
+    addTimeInputListeners(timeEnd, false);
 
     async function loadMetadata() {
       try {
@@ -386,7 +436,7 @@
 
     btnPreview.addEventListener('click', () => {
       if (!activeRegion || !wavesurfer) return;
-      activeRegion.play();
+      wavesurfer.play(activeRegion.start, activeRegion.end);
     });
 
     btnStop.addEventListener('click', () => {

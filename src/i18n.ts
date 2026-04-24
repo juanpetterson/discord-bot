@@ -126,6 +126,15 @@ const translations = {
     'group.autoNotEnough': '\u274c Precisei de {need} n\u00e3o-exclu\u00eddos no canal de voz, mas s\u00f3 encontrei {found}.',
     'group.autoNotInVoice': '\u274c Voc\u00ea precisa estar em um canal de voz para usar `!autox{size}`.',
     'group.autoNoVoiceMembers': '\u274c Nenhum membro n\u00e3o-bot encontrado no seu canal de voz.',
+    'group.autoPreviewDescription': '\ud83d\udc40 Preview dos times. Confirme ou re-randomize antes de publicar no canal.',
+    'group.btnConfirmTeams': '\u2705 Confirmar Times',
+    'group.btnRerollTeams': '\ud83d\udd00 Re-randomizar',
+    'group.btnCancelPreview': '\ud83d\udeab Cancelar',
+    'group.autoPreviewOnlyCreator': '\u274c Somente {name} pode confirmar, re-randomizar ou cancelar os times.',
+    'group.autoPreviewDmSent': '\ud83d\udc40 Verifique seu privado para confirmar os times!',
+    'group.autoPreviewDmFailed': '\u274c N\u00e3o consegui te enviar DM. Ative mensagens diretas deste servidor e tente novamente.',
+    'group.autoPreviewCancelledTitle': '\ud83d\udeab Preview cancelado',
+    'group.autoPreviewCancelledDescription': 'Os times n\u00e3o foram publicados. Use `!autox2`, `!autox4` ou `!autox5` para tentar novamente.',
 
     // \u2500\u2500 Bet \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'bet.usage': 'Uso: `!bet @jogador n\u00f3s` ou `!bet @jogador eles`',
@@ -336,6 +345,15 @@ const translations = {
     'group.autoNotEnough': '\u274c Need {need} non-excluded members in voice, but only found {found}.',
     'group.autoNotInVoice': '\u274c You need to be in a voice channel to use `!autox{size}`.',
     'group.autoNoVoiceMembers': '\u274c No non-bot members found in your voice channel.',
+    'group.autoPreviewDescription': '\ud83d\udc40 Teams preview. Confirm or reroll before posting to the channel.',
+    'group.btnConfirmTeams': '\u2705 Confirm Teams',
+    'group.btnRerollTeams': '\ud83d\udd00 Reroll',
+    'group.btnCancelPreview': '\ud83d\udeab Cancel',
+    'group.autoPreviewOnlyCreator': '\u274c Only {name} can confirm, reroll or cancel the teams.',
+    'group.autoPreviewDmSent': '\ud83d\udc40 Check your DMs to confirm the teams!',
+    'group.autoPreviewDmFailed': '\u274c Could not send you a DM. Enable direct messages from server members and try again.',
+    'group.autoPreviewCancelledTitle': '\ud83d\udeab Preview cancelled',
+    'group.autoPreviewCancelledDescription': 'Teams were not posted. Run `!autox2`, `!autox4` or `!autox5` to try again.',
 
     // \u2500\u2500 Bet \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     'bet.usage': 'Usage: `!bet @player n\u00f3s` or `!bet @player eles`',

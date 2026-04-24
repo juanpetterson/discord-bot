@@ -158,11 +158,11 @@ server.post('/clips/:clipId/upload', async (req, res) => {
     return
   }
 
-  const safeAuthor = author.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim()
-  const safeName = soundName.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim()
+  const safeAuthor = sanitizeFilenamePart(author)
+  const safeName = sanitizeFilenamePart(soundName)
 
   if (!safeAuthor || !safeName) {
-    res.status(400).json({ error: 'Author and Sound Name can only contain letters, numbers, spaces, hyphens, and underscores.' })
+    res.status(400).json({ error: 'Author and Sound Name must contain at least one valid character.' })
     return
   }
 
@@ -190,6 +190,17 @@ function formatMsToTime(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+// Preserve Unicode letters (including accents), numbers, spaces, and safe punctuation.
+// Strip only path-dangerous characters so the original name survives.
+function sanitizeFilenamePart(input: string): string {
+  return input
+    .normalize('NFC')
+    .replace(/[/\\:*?"<>|\x00-\x1f]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^\.+|\.+$/g, '')
+    .trim()
 }
 
 export const keepAlive = () => {

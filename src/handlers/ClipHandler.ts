@@ -694,7 +694,7 @@ export class ClipHandler {
 
     const startInput = new TextInputBuilder()
       .setCustomId('trim_start')
-      .setLabel('Start Time (mm:ss)')
+      .setLabel('Start Time (ss:ms) e.g. 05:00 = 5 seconds')
       .setPlaceholder('00:00')
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
@@ -702,8 +702,8 @@ export class ClipHandler {
 
     const endInput = new TextInputBuilder()
       .setCustomId('trim_end')
-      .setLabel('End Time (mm:ss)')
-      .setPlaceholder('01:00')
+      .setLabel('End Time (ss:ms) e.g. 60:00 = 60 seconds')
+      .setPlaceholder('60:00')
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(5);
@@ -748,7 +748,7 @@ export class ClipHandler {
     const endMs = ClipHandler.parseTimeToMs(endStr);
 
     if (startMs === null || endMs === null) {
-      await interaction.reply({ content: '⚠️ Invalid time format. Use `mm:ss` (e.g., `00:10`).', ephemeral: true });
+      await interaction.reply({ content: '⚠️ Invalid time format. Use `ss:ms` (e.g., `05:00` = 5 seconds).', ephemeral: true });
       return;
     }
 
@@ -775,7 +775,11 @@ export class ClipHandler {
 
       const trimId = crypto.randomUUID();
       ClipHandler.trimmedFileStore.set(trimId, outputPath);
-      const uploadButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      const actionButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${ClipHandler.TRIM_BUTTON_PREFIX}${clipId}`)
+          .setLabel('✂️ Trim Again')
+          .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`${ClipHandler.UPLOAD_BUTTON_PREFIX}${trimId}`)
           .setLabel('💾 Upload as Sound')
@@ -785,7 +789,7 @@ export class ClipHandler {
       await interaction.editReply({
         content: `✂️ **Trimmed Clip** — ${trackLabel} (${startStr} → ${endStr})`,
         files: [outputPath],
-        components: [uploadButton],
+        components: [actionButtons],
       });
     } catch (err) {
       console.error('ClipHandler: Error trimming clip:', err);
@@ -842,7 +846,11 @@ export class ClipHandler {
 
       const trimId = crypto.randomUUID();
       ClipHandler.trimmedFileStore.set(trimId, trimmedPath);
-      const uploadButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      const actionButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${ClipHandler.TRIM_BUTTON_PREFIX}${clipId}`)
+          .setLabel('✂️ Trim Again')
+          .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`${ClipHandler.UPLOAD_BUTTON_PREFIX}${trimId}`)
           .setLabel('💾 Upload as Sound')
@@ -852,7 +860,7 @@ export class ClipHandler {
       await channel.send({
         content: `✂️ **Trimmed Clip** — ${trackLabel} (${startStr} → ${endStr})`,
         files: [trimmedPath],
-        components: [uploadButton],
+        components: [actionButtons],
       });
       return true;
     } catch (err) {
@@ -869,12 +877,18 @@ export class ClipHandler {
       const startSec = startMs / 1000;
       const endSec = endMs / 1000;
 
+      // Re-encode instead of stream-copying: MP3 stream copy cuts at packet boundaries,
+      // leaving corrupted headers/frames that many players decode with audible degradation.
+      // Re-encoding at matching bitrate produces clean, frame-accurate cuts.
       const ffmpeg = spawn(ffmpegPath, [
         '-y',
         '-i', inputPath,
         '-ss', String(startSec),
         '-to', String(endSec),
-        '-c', 'copy',
+        '-codec:a', 'libmp3lame',
+        '-b:a', '256k',
+        '-ar', String(SAMPLE_RATE),
+        '-ac', String(CHANNELS),
         outputPath,
       ]);
 
@@ -900,17 +914,28 @@ export class ClipHandler {
   private static parseTimeToMs(timeStr: string): number | null {
     const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
     if (!match) return null;
-    const minutes = parseInt(match[1], 10);
-    const seconds = parseInt(match[2], 10);
-    if (seconds >= 60) return null;
-    return (minutes * 60 + seconds) * 1000;
+    const seconds = parseInt(match[1], 10);
+    const ms = parseInt(match[2], 10);
+    if (seconds > 60 || ms > 99) return null;
+    return seconds * 1000 + ms * 10;
   }
 
   private static formatMsToTime(ms: number): string {
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    const totalMs = Math.round(ms);
+    const seconds = Math.floor(totalMs / 1000);
+    const centis = Math.floor((totalMs % 1000) / 10);
+    return `${String(seconds).padStart(2, '0')}:${String(centis).padStart(2, '0')}`;
+  }
+
+  // Preserve Unicode letters (including accents), numbers, spaces, and safe punctuation.
+  // Strip only path-dangerous characters so the original name survives.
+  private static sanitizeFilenamePart(input: string): string {
+    return input
+      .normalize('NFC')
+      .replace(/[/\\:*?"<>|\x00-\x1f]/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/^\.+|\.+$/g, '')
+      .trim();
   }
 
   // ========== Upload as Sound Flow ==========
@@ -979,12 +1004,12 @@ export class ClipHandler {
       return;
     }
 
-    // Sanitize inputs to prevent path traversal
-    const safeAuthor = author.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
-    const safeName = soundName.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
+    // Preserve Unicode letters (including accents); strip only path-dangerous chars
+    const safeAuthor = ClipHandler.sanitizeFilenamePart(author);
+    const safeName = ClipHandler.sanitizeFilenamePart(soundName);
 
     if (!safeAuthor || !safeName) {
-      await interaction.reply({ content: '⚠️ Author and Sound Name can only contain letters, numbers, spaces, hyphens, and underscores.', ephemeral: true });
+      await interaction.reply({ content: '⚠️ Author and Sound Name must contain at least one valid character.', ephemeral: true });
       return;
     }
 
