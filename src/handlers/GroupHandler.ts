@@ -998,7 +998,6 @@ export class GroupHandler {
 
     try {
       await message.author.send({ embeds: [previewEmbed], components: [row] })
-      await message.reply(t('group.autoPreviewDmSent'))
     } catch {
       pendingAutoGroups.delete(channelId)
       await message.reply(t('group.autoPreviewDmFailed'))
