@@ -50,9 +50,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Author or sound name too long' });
   }
 
-  // Sanitize
-  const safeAuthor = author.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
-  const safeName = soundName.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
+  // Preserve Unicode letters/accents; strip only path-dangerous chars
+  const sanitize = (s: string) => s
+    .normalize('NFC')
+    .replace(/[/\\:*?"<>|\x00-\x1f]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^\.+|\.+$/g, '')
+    .trim();
+  const safeAuthor = sanitize(author);
+  const safeName = sanitize(soundName);
   if (!safeAuthor || !safeName) {
     return res.status(400).json({ error: 'Invalid author or sound name' });
   }

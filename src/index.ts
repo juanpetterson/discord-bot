@@ -173,7 +173,10 @@ client.on('messageCreate', async (message: Message) => {
       message.attachments.size > 0
     ) {
       const attachment = message.attachments.first()!;
-      const fileName = attachment.name || 'unknown.wav';
+      // Discord rewrites spaces/specials to underscores in attachment.name; the original
+      // filename is preserved between backticks in the message content set by upload.ts.
+      const originalNameMatch = message.content.match(/📁 `([^`]+)`/);
+      const fileName = originalNameMatch?.[1] || attachment.name || 'unknown.wav';
       try {
         await downloadMP3(
           { url: attachment.url, name: fileName },
