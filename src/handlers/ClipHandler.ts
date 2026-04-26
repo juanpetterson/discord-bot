@@ -22,6 +22,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import archiver from 'archiver';
+import { findSoundsChannel, postAvailableSoundsToChannel } from './SoundsListHandler';
 
 const CLIP_DURATION_MS = 60_000; // 1 minute rolling buffer
 const SAMPLE_RATE = 48000;
@@ -1028,6 +1029,8 @@ export class ClipHandler {
       await interaction.reply({
         content: `✅ Sound uploaded as **${destFileName}**!\nUse \`!play ${safeName}\` to play it.`,
       });
+      const soundsChannel = findSoundsChannel(interaction.guild, interaction.channel);
+      if (soundsChannel) await postAvailableSoundsToChannel(soundsChannel);
     } catch (err) {
       console.error('ClipHandler: Error uploading sound:', err);
       await interaction.reply({ content: '❌ Failed to upload sound.', ephemeral: true });

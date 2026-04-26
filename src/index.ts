@@ -82,6 +82,7 @@ import { GroupHandler } from './handlers/GroupHandler'
 import { ClipHandler } from './handlers/ClipHandler'
 import { JoinSoundHandler } from './handlers/JoinSoundHandler'
 import { PollingJob } from './handlers/PollingJob'
+import { findSoundsChannel, postAvailableSoundsToChannel } from './handlers/SoundsListHandler'
 
 import { calculateTextWidth } from './utils'
 
@@ -184,6 +185,8 @@ client.on('messageCreate', async (message: Message) => {
           fileName.replace(/\.[^.]+$/, '')
         );
         await message.edit(`✅ **Sound Uploaded**\n📁 \`${fileName}\``);
+        const soundsChannel = findSoundsChannel(message.guild, message.channel);
+        if (soundsChannel) await postAvailableSoundsToChannel(soundsChannel);
       } catch (err) {
         console.error('Web editor upload save error:', err);
         await message.edit(`❌ **Upload Failed**\n📁 \`${fileName}\``).catch(() => {});
