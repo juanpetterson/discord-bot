@@ -160,6 +160,7 @@ client.on(Events.VoiceStateUpdate, async (oldState: VoiceState, newState: VoiceS
       if (soundName && fileExists) {
         VoiceHandler.executeVoice(channel, filePath);
       }
+      await GroupHandler.handleVoiceJoin(user.id, newState.channelId, client);
     }
   }
 });

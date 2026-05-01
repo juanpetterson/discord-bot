@@ -21,6 +21,7 @@ export interface Group {
   members: { id: string; name: string }[]
   channelId: string
   messageId?: string
+  originalMembers?: { id: string; name: string }[]
 }
 
 // One active group per guild channel (keyed by channelId)
@@ -55,7 +56,6 @@ interface PendingAutoGroup {
   sourceVoiceChannelId: string
   excludedIds: string[]
 }
-const pendingAutoGroups = new Map<string, PendingAutoGroup>()
 
 export class GroupHandler {
   // ─── !x2 / !x4 / !x5 ────────────────────────────────────────────────────
@@ -187,106 +187,6 @@ export class GroupHandler {
 
   // ─── Button interactions ──────────────────────────────────────────────────
   static async handleButton(interaction: any) {
-    // Auto-preview buttons are sent via DM; the guild channel ID is embedded in the customId
-    if (
-      interaction.customId.startsWith('group_auto_confirm:') ||
-      interaction.customId.startsWith('group_auto_reroll:') ||
-      interaction.customId.startsWith('group_auto_cancel:')
-    ) {
-      const colonIdx = interaction.customId.indexOf(':')
-      const action = interaction.customId.slice(0, colonIdx)
-      const guildChannelId = interaction.customId.slice(colonIdx + 1)
-      const pending = pendingAutoGroups.get(guildChannelId)
-
-      if (!pending) {
-        await interaction.reply({ content: t('group.noTeamData'), ephemeral: true })
-        return
-      }
-      if (interaction.user.id !== pending.triggerUserId) {
-        await interaction.reply({ content: t('group.autoPreviewOnlyCreator', { name: `<@${pending.triggerUserId}>` }), ephemeral: true })
-        return
-      }
-
-      if (action === 'group_auto_confirm') {
-        const { size, teamA, teamB, sourceVoiceChannelId, excludedIds } = pending
-        activeGroups.set(guildChannelId, {
-          size,
-          creatorId: interaction.user.id,
-          creatorName: interaction.user.username,
-          members: [...teamA, ...teamB],
-          channelId: guildChannelId,
-        })
-        lastTeams.set(guildChannelId, {
-          teamA,
-          teamB,
-          usedHeroIds: [],
-          autoGroup: { sourceVoiceChannelId, excludedIds },
-        })
-        pendingAutoGroups.delete(guildChannelId)
-
-        await interaction.deferUpdate()
-        await GroupHandler._disableButtons(interaction)
-
-        const guildChannel = interaction.client.channels.cache.get(guildChannelId) as any
-        if (!guildChannel) return
-
-        const teamsEmbed = new EmbedBuilder()
-          .setColor(0x3071f7)
-          .setTitle(`🤖 Auto x${size}`)
-          .addFields(
-            { name: t('group.teamATitle'), value: teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true },
-            { name: t('group.teamBTitle'), value: teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true }
-          )
-          .setFooter({ text: `!x${size}cancel | !x${size}kick <nick>` })
-
-        const confirmRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setCustomId('group_assign_heroes')
-            .setLabel(t('group.btnAssignHeroes'))
-            .setStyle(ButtonStyle.Success),
-          new ButtonBuilder()
-            .setCustomId('group_split_channels')
-            .setLabel(t('group.btnMoveChannels'))
-            .setStyle(ButtonStyle.Secondary)
-        )
-
-        await guildChannel.send({ embeds: [teamsEmbed], components: [confirmRow] })
-        return
-      }
-
-      if (action === 'group_auto_reroll') {
-        const { size, candidates } = pending
-        const totalSlots = size * 2
-        const newShuffled = GroupHandler._shuffle([...candidates]).slice(0, totalSlots)
-        pending.teamA = newShuffled.slice(0, size)
-        pending.teamB = newShuffled.slice(size)
-
-        const previewEmbed = new EmbedBuilder()
-          .setColor(0xffa500)
-          .setTitle(`👁️ Preview — Auto x${size}`)
-          .setDescription(t('group.autoPreviewDescription'))
-          .addFields(
-            { name: t('group.teamATitle'), value: pending.teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true },
-            { name: t('group.teamBTitle'), value: pending.teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true }
-          )
-
-        await interaction.update({ embeds: [previewEmbed], components: [GroupHandler._buildAutoPreviewRow(guildChannelId)] })
-        return
-      }
-
-      if (action === 'group_auto_cancel') {
-        pendingAutoGroups.delete(guildChannelId)
-        const cancelledEmbed = new EmbedBuilder()
-          .setColor(0x4f545c)
-          .setTitle(t('group.autoPreviewCancelledTitle'))
-          .setDescription(t('group.autoPreviewCancelledDescription'))
-        await interaction.update({ embeds: [cancelledEmbed], components: [] })
-        return
-      }
-
-      return
-    }
-
     const channelId = interaction.channel?.id
     if (!channelId) return
 
@@ -515,23 +415,6 @@ export class GroupHandler {
   }
 
   /** Disables all buttons on the message that triggered this interaction. */
-  private static _buildAutoPreviewRow(guildChannelId: string) {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`group_auto_confirm:${guildChannelId}`)
-        .setLabel(t('group.btnConfirmTeams'))
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`group_auto_reroll:${guildChannelId}`)
-        .setLabel(t('group.btnRerollTeams'))
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(`group_auto_cancel:${guildChannelId}`)
-        .setLabel(t('group.btnCancelPreview'))
-        .setStyle(ButtonStyle.Danger)
-    )
-  }
-
   private static async _disableButtons(interaction: any) {
     try {
       const disabled = interaction.message.components.map((row: any) =>
@@ -974,34 +857,49 @@ export class GroupHandler {
 
     const channelId = message.channel.id
 
-    // Store as pending — teams are committed only after the trigger user confirms
-    pendingAutoGroups.set(channelId, {
+    // Check if group already exists
+    const existing = activeGroups.get(channelId)
+    if (existing) {
+      message.reply(t('group.alreadyExists', { size: existing.size }))
+      return
+    }
+
+    // Create the group
+    const group: Group = {
       size,
-      candidates,
+      creatorId: message.author.id,
+      creatorName: message.member?.displayName ?? message.author.username,
+      members: shuffled,
+      channelId,
+      originalMembers: shuffled,
+    }
+    activeGroups.set(channelId, group)
+
+    // Store teams
+    lastTeams.set(channelId, {
       teamA,
       teamB,
-      triggerUserId: message.author.id,
-      sourceVoiceChannelId: voiceChannel.id,
-      excludedIds: Array.from(excludedIds),
+      autoGroup: {
+        sourceVoiceChannelId: voiceChannel.id,
+        excludedIds: Array.from(excludedIds),
+      },
     })
 
-    const previewEmbed = new EmbedBuilder()
-      .setColor(0xffa500)
-      .setTitle(`👁️ Preview — Auto x${size}`)
-      .setDescription(t('group.autoPreviewDescription'))
+    console.log(`[GroupHandler] Auto x${size} group created by ${group.creatorName}`)
+
+    // Send teams embed
+    const teamsEmbed = new EmbedBuilder()
+      .setColor(0x00ff00)
+      .setTitle(`⚔️ Auto x${size} Teams`)
       .addFields(
         { name: t('group.teamATitle'), value: teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true },
         { name: t('group.teamBTitle'), value: teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true }
       )
 
-    const row = GroupHandler._buildAutoPreviewRow(channelId)
+    const row = GroupHandler._buildGroupRow(channelId)
 
-    try {
-      await message.author.send({ embeds: [previewEmbed], components: [row] })
-    } catch {
-      pendingAutoGroups.delete(channelId)
-      await message.reply(t('group.autoPreviewDmFailed'))
-    }
+    const sentMessage = await message.channel.send({ embeds: [teamsEmbed], components: [row] })
+    group.messageId = sentMessage.id
   }
 
   /**
@@ -1036,6 +934,36 @@ export class GroupHandler {
       console.log(`[GroupHandler] ${member.name} left voice — removed from x${group.size} group`)
       if (textChannel) {
         await textChannel.send(t('group.voiceLeft', { name: member.name }) + creatorNote)
+      }
+      break
+    }
+  }
+
+  /**
+   * Called from the VoiceStateUpdate event when a user joins voice.
+   * If they were in the original auto group members and not currently in the group, add them back.
+   */
+  static async handleVoiceJoin(userId: string, voiceChannelId: string, client: any) {
+    for (const [channelId, group] of activeGroups.entries()) {
+      if (!group.originalMembers) continue
+      const stored = lastTeams.get(channelId)
+      if (!stored?.autoGroup || stored.autoGroup.sourceVoiceChannelId !== voiceChannelId) continue
+
+      const wasOriginal = group.originalMembers.some((m) => m.id === userId)
+      const isCurrentlyIn = group.members.some((m) => m.id === userId)
+      if (!wasOriginal || isCurrentlyIn) continue
+
+      // Get current display name
+      const guild = client.guilds.cache.get(client.guilds.cache.keys().next().value) // assuming single guild
+      const member = guild?.members.cache.get(userId)
+      const displayName = member?.displayName ?? member?.user?.username ?? 'Unknown'
+
+      // Add back
+      group.members.push({ id: userId, name: displayName })
+      const textChannel = client.channels.cache.get(channelId) as any
+      console.log(`[GroupHandler] ${displayName} rejoined voice — added back to x${group.size} group`)
+      if (textChannel) {
+        await textChannel.send(t('group.voiceRejoined', { name: displayName }))
       }
       break
     }
