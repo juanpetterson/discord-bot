@@ -1,6 +1,7 @@
 import { Message, GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits } from 'discord.js'
 import { t } from '../i18n'
 import { askAI, heroPickPrompt } from '../ai'
+import { fetchDotaNick, DISCORD_TO_STEAM } from './PlayerData'
 
 // Dota 2 roles per slot index (0-4 = team A, 5-9 = team B)
 const ROLES = ['Hard Carry', 'Mid Lane', 'Offlane', 'Soft Support', 'Hard Support']
@@ -32,6 +33,9 @@ interface StoredTeams {
   teamA: { id: string; name: string }[]
   teamB: { id: string; name: string }[]
   usedHeroIds?: number[]
+  blockedHeroIds?: number[]
+  teamATitle?: string
+  teamBTitle?: string
   autoGroup?: {
     sourceVoiceChannelId: string
     excludedIds: string[]
@@ -58,6 +62,40 @@ interface PendingAutoGroup {
 }
 
 export class GroupHandler {
+  // ─── Helper: Get preferred names (Steam nick if mapped, else Discord) ───
+  private static async _getPlayerNames(members: { id: string; name: string }[]): Promise<{ id: string; name: string }[]> {
+    const result = []
+    for (const member of members) {
+      // Find Discord name in DISCORD_TO_STEAM (keys are Discord names, not IDs)
+      const discordName = Object.keys(DISCORD_TO_STEAM).find(key => key.toLowerCase() === member.name.toLowerCase())
+      const steamId = discordName ? DISCORD_TO_STEAM[discordName] : undefined
+      const preferredName = await fetchDotaNick(steamId, member.name)
+      result.push({ id: member.id, name: preferredName })
+    }
+    return result
+  }
+
+  // ─── Generate team names with AI ─────────────────────────────────────────
+  private static async _generateTeamNames(playerNames: string[]): Promise<{ goodTeam: string; badTeam: string }> {
+    const prompt = `Gere dois nomes criativos e agressivos para times de Dota 2 baseados nestes jogadores: ${playerNames.join(', ')}.
+
+Um nome deve soar como um time vencedor, forte e superior (ex: "Invencíveis", "Deuses da Vitória").
+O outro deve soar como um time perdedor, fraco e ridículo (ex: "Noobs Patéticos", "Perdedores Eternos").
+
+Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
+
+    const response = await askAI(prompt, 100, 1.5)
+    if (response) {
+      try {
+        const parsed = JSON.parse(response)
+        return { goodTeam: parsed.goodTeam || 'Time Invencível', badTeam: parsed.badTeam || 'Time Noob' }
+      } catch (e) {
+        console.warn('[TeamNames] Failed to parse AI response:', response)
+      }
+    }
+    // Fallback
+    return { goodTeam: 'Time Forte', badTeam: 'Time Fraco' }
+  }
   // ─── !x2 / !x4 / !x5 ────────────────────────────────────────────────────
   static async startOrJoin(message: Message, size: 2 | 4 | 5) {
     const channelId = message.channel.id
@@ -253,7 +291,11 @@ export class GroupHandler {
       }
       await interaction.deferUpdate()
       await GroupHandler._disableButtons(interaction)
-      await GroupHandler._assignHeroesToTeams(interaction, stored.teamA, stored.teamB)
+      await GroupHandler._assignHeroesToTeams(interaction, stored.teamA, stored.teamB, {
+        blockedHeroIds: new Set(stored.blockedHeroIds ?? []),
+        teamATitle: stored.teamATitle,
+        teamBTitle: stored.teamBTitle,
+      })
       return
     }
 
@@ -329,7 +371,11 @@ export class GroupHandler {
         rerollVotes.delete(channelId)
         await interaction.deferUpdate()
         await GroupHandler._disableButtons(interaction)
-        await GroupHandler._assignHeroesToTeams(interaction, stored.teamA, stored.teamB)
+        await GroupHandler._assignHeroesToTeams(interaction, stored.teamA, stored.teamB, {
+          blockedHeroIds: new Set(stored.blockedHeroIds ?? []),
+          teamATitle: stored.teamATitle,
+          teamBTitle: stored.teamBTitle,
+        })
       } else {
         // Show current vote status
         const votesA = votes.teamA.size
@@ -511,6 +557,10 @@ export class GroupHandler {
     }
 
     const usedHeroIds = new Set(stored.usedHeroIds ?? [])
+    for (const id of stored.blockedHeroIds ?? []) {
+      usedHeroIds.add(id)
+    }
+
     const heroes: any[] = require('../assets/data/heroes.json')
     if (heroes.filter((hero: any) => !usedHeroIds.has(hero.id)).length < nextPlayers.length) {
       await interaction.followUp({ content: t('group.fearlessNoHeroesLeft'), ephemeral: true })
@@ -531,29 +581,37 @@ export class GroupHandler {
     await GroupHandler._assignHeroesToTeams(interaction, teamA, teamB, {
       titleKey: 'group.fearlessTitle',
       blockedHeroIds: usedHeroIds,
+      teamATitle: stored.teamATitle,
+      teamBTitle: stored.teamBTitle,
     })
   }
 
   private static async _randomTeams(interaction: any, group: Group) {
-    const shuffled = GroupHandler._shuffle(group.members)
+    const membersWithNames = await GroupHandler._getPlayerNames(group.members)
+    const shuffled = GroupHandler._shuffle(membersWithNames)
     const half = group.size  // exactly size players per team
     const teamA = shuffled.slice(0, half)
     const teamB = shuffled.slice(half)
 
-    // Persist for the move-to-channels button
-    lastTeams.set(interaction.channel.id, { teamA, teamB })
+    // Generate team names
+    const playerNames = [...teamA, ...teamB].map(m => m.name)
+    const { goodTeam, badTeam } = await GroupHandler._generateTeamNames(playerNames)
+    const isAGood = Math.random() < 0.5
+    const teamATitle = isAGood ? goodTeam : badTeam
+    const teamBTitle = isAGood ? badTeam : goodTeam
 
-    const embed = new EmbedBuilder()
+    // Persist for the move-to-channels button
+    lastTeams.set(interaction.channel.id, { teamA, teamB, teamATitle, teamBTitle })
       .setColor(0x3071f7)
       .setTitle(t('group.btnRandomTeams'))
       .addFields(
         {
-          name: t('group.teamATitle'),
+          name: teamATitle,
           value: teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'),
           inline: true,
         },
         {
-          name: t('group.teamBTitle'),
+          name: teamBTitle,
           value: teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'),
           inline: true,
         }
@@ -570,13 +628,22 @@ export class GroupHandler {
   }
 
   private static async _randomTeamsHeroes(interaction: any, group: Group) {
-    const shuffledMembers = GroupHandler._shuffle(group.members)
+    const membersWithNames = await GroupHandler._getPlayerNames(group.members)
+    const shuffledMembers = GroupHandler._shuffle(membersWithNames)
     const half = group.size
     const teamA = shuffledMembers.slice(0, half)
     const teamB = shuffledMembers.slice(half)
+
+    // Generate team names
+    const playerNames = [...teamA, ...teamB].map(m => m.name)
+    const { goodTeam, badTeam } = await GroupHandler._generateTeamNames(playerNames)
+    const isAGood = Math.random() < 0.5
+    const teamATitle = isAGood ? goodTeam : badTeam
+    const teamBTitle = isAGood ? badTeam : goodTeam
+
     // Persist for the move-to-channels button
-    lastTeams.set(interaction.channel.id, { teamA, teamB })
-    await GroupHandler._assignHeroesToTeams(interaction, teamA, teamB)
+    lastTeams.set(interaction.channel.id, { teamA, teamB, teamATitle, teamBTitle })
+    await GroupHandler._assignHeroesToTeams(interaction, teamA, teamB, { teamATitle, teamBTitle })
   }
 
   private static async _assignHeroesToTeams(
@@ -586,6 +653,8 @@ export class GroupHandler {
     options?: {
       titleKey?: string
       blockedHeroIds?: Set<number>
+      teamATitle?: string
+      teamBTitle?: string
     }
   ) {
     const heroes: any[] = require('../assets/data/heroes.json')
@@ -675,7 +744,7 @@ export class GroupHandler {
         .setDescription(`**${a.role}** — ${a.member.name}\n↳ **${a.hero.localized_name}**`)
       if (i === 0) {
         e.setTitle(t(options?.titleKey ?? 'group.btnRandomTeamsHeroes'))
-        e.setAuthor({ name: `🔵 ${t('group.teamATitle')}` })
+        e.setAuthor({ name: `🔵 ${options?.teamATitle || t('group.teamATitle')}` })
       }
       embeds.push(e)
     })
@@ -687,7 +756,7 @@ export class GroupHandler {
         .setThumbnail(heroImg(a.hero.name))
         .setDescription(`**${a.role}** — ${a.member.name}\n↳ **${a.hero.localized_name}**`)
       if (i === 0) {
-        e.setAuthor({ name: `🔴 ${t('group.teamBTitle')}` })
+        e.setAuthor({ name: `🔴 ${options?.teamBTitle || t('group.teamBTitle')}` })
       }
       embeds.push(e)
     })
@@ -830,7 +899,7 @@ export class GroupHandler {
    * picks exactly (size * 2) players, randomizes teams immediately,
    * and posts the result with [⚔️ Assign Heroes] and [🔀 Move to Channels] buttons.
    */
-  static async autoGroup(message: Message, size: 2 | 4 | 5) {
+  static async autoGroup(message: Message, size: 2 | 4 | 5, blockedHeroIds: number[] = []) {
     const totalSlots = size * 2
     const voiceMember = message.member
 
@@ -879,6 +948,7 @@ export class GroupHandler {
     lastTeams.set(channelId, {
       teamA,
       teamB,
+      blockedHeroIds,
       autoGroup: {
         sourceVoiceChannelId: voiceChannel.id,
         excludedIds: Array.from(excludedIds),

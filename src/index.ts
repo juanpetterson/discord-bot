@@ -104,6 +104,29 @@ const COLORS_SCHEME_EXTRA = {
   2: 0x0000ff,
 }
 
+function parseHeroList(input: string): string[] {
+  const trimmed = input.trim()
+  if (!trimmed) return []
+
+  // If it starts with [, parse as JSON array
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) {
+        return parsed.map(item => String(item).trim().replace(/^['"]|['"]$/g, ''))
+      }
+    } catch {
+      // Fall back to splitting
+    }
+  }
+
+  // Otherwise, split by spaces and clean quotes
+  return trimmed
+    .split(/\s+/)
+    .map(item => item.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean)
+}
+
 export const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -351,10 +374,35 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
-    // Auto group: !autox2 / !autox4 / !autox5
-    if (messageContent.startsWith('!autox2') || messageContent.startsWith('!autox4') || messageContent.startsWith('!autox5')) {
-      const size = messageContent.startsWith('!autox4') ? 4 : messageContent.startsWith('!autox5') ? 5 : 2
-      await GroupHandler.autoGroup(message, size)
+    // Auto group: !autox2 / !autox4 / !autox5 with optional mentions and --exclude [hero list]
+    const autoCommandMatch = message.content.match(/^!autox([245])\b/i)
+    if (autoCommandMatch) {
+      const size = autoCommandMatch[1] === '4' ? 4 : autoCommandMatch[1] === '5' ? 5 : 2
+      const excludeMatch = message.content.match(/--exclude\s+(.+)/i)
+      const blockedHeroNames = excludeMatch ? parseHeroList(excludeMatch[1]) : []
+      const blockedHeroIds: number[] = []
+      const unknownHeroes: string[] = []
+
+      for (const heroName of blockedHeroNames) {
+        const normalized = heroName.trim().toLowerCase()
+        if (!normalized) continue
+        const hero = heroes.find((h: any) =>
+          h.name.toLowerCase() === normalized ||
+          h.localized_name.toLowerCase() === normalized
+        )
+        if (hero) {
+          blockedHeroIds.push(hero.id)
+        } else {
+          unknownHeroes.push(heroName)
+        }
+      }
+
+      if (unknownHeroes.length > 0) {
+        await message.reply(`Não conheço esses heróis: ${unknownHeroes.join(', ')}. Use nomes como \`lion\`, \`ursa\`, \`anti-mage\`.`)
+        return
+      }
+
+      await GroupHandler.autoGroup(message, size, blockedHeroIds)
       return
     }
 
@@ -398,7 +446,7 @@ client.on('messageCreate', async (message: Message) => {
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
           { name: '🔥 Fun', value: '`!roast @user` — Roast someone (career stats)\n`!roastlast [@user|nick]` — Deep roast of last match (items, build, position)\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
           { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet @player` — Cancel your bet on that player\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
-          { name: '🎮 x2/x4/x5', value: '`!x2` / `!x4` / `!x5` — Start or join a group manually\n`!autox2` / `!autox4` / `!autox5 [@skip1 @skip2]` — Auto-fill from voice channel (exclude @mentions)\n`!x2leave` / `!x4leave` / `!x5leave` — Leave group\n`!x2cancel` / `!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x2kick <nick>` / `!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)\n> Buttons: **🔀 Move to Channels** splits voice after teams are decided | **⚔️ Assign Heroes** assigns Dota 2 heroes', inline: false },
+          { name: '🎮 x2/x4/x5', value: '`!x2` / `!x4` / `!x5` — Start or join a group manually\n`!autox2` / `!autox4` / `!autox5` — Auto-fill from voice channel (exclude @mentions)\n`!autox5 @mentions --exclude [\'lion\', \'ursa\']` — Auto-fill and block listed heroes from the random draft\n`!x2leave` / `!x4leave` / `!x5leave` — Leave group\n`!x2cancel` / `!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x2kick <nick>` / `!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)\n> Buttons: **🔀 Move to Channels** splits voice after teams are decided | **⚔️ Assign Heroes** assigns Dota 2 heroes', inline: false },
           { name: '🗣️ TTS', value: '`$text` — Google TTS\n`%text` — AI TTS\n`&text` — AWS TTS\n`!langs` — Supported languages', inline: false },
         )
 
