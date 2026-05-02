@@ -451,6 +451,19 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
     await channel.send({ embeds: [embed], components: [row] })
   }
 
+  private static _buildGroupRow(channelId: string) {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('group_assign_heroes')
+        .setLabel(t('group.btnAssignHeroes'))
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('group_split_channels')
+        .setLabel(t('group.btnMoveChannels'))
+        .setStyle(ButtonStyle.Secondary)
+    )
+  }
+
   private static _shuffle<T>(arr: T[]): T[] {
     const a = [...arr]
     for (let i = a.length - 1; i > 0; i--) {
