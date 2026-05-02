@@ -87,7 +87,8 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
     const response = await askAI(prompt, 100, 1.5)
     if (response) {
       try {
-        const parsed = JSON.parse(response)
+        const jsonMatch = response.match(/\{[\s\S]*\}/)
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : response)
         return { goodTeam: parsed.goodTeam || 'Time Invencível', badTeam: parsed.badTeam || 'Time Noob' }
       } catch (e) {
         console.warn('[TeamNames] Failed to parse AI response:', response)
@@ -946,6 +947,13 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
       return
     }
 
+    const preferredMembers = await GroupHandler._getPlayerNames(shuffled)
+    const playerNames = preferredMembers.map((m) => m.name)
+    const { goodTeam, badTeam } = await GroupHandler._generateTeamNames(playerNames)
+    const isAGood = Math.random() < 0.5
+    const teamATitle = isAGood ? goodTeam : badTeam
+    const teamBTitle = isAGood ? badTeam : goodTeam
+
     // Create the group
     const group: Group = {
       size,
@@ -961,6 +969,8 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
     lastTeams.set(channelId, {
       teamA,
       teamB,
+      teamATitle,
+      teamBTitle,
       blockedHeroIds,
       autoGroup: {
         sourceVoiceChannelId: voiceChannel.id,
@@ -975,8 +985,8 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
       .setColor(0x00ff00)
       .setTitle(`⚔️ Auto x${size} Teams`)
       .addFields(
-        { name: t('group.teamATitle'), value: teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true },
-        { name: t('group.teamBTitle'), value: teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true }
+        { name: teamATitle, value: teamA.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true },
+        { name: teamBTitle, value: teamB.map((m, i) => `${i + 1}. ${m.name}`).join('\n'), inline: true }
       )
 
     const row = GroupHandler._buildGroupRow(channelId)
