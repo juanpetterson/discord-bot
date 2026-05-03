@@ -79,6 +79,7 @@ import { RoastHandler } from './handlers/RoastHandler'
 import { PollHandler } from './handlers/PollHandler'
 import { BetHandler } from './handlers/BetHandler'
 import { GroupHandler } from './handlers/GroupHandler'
+import { clearRecentHeroes } from './services/recentHeroes'
 import { ClipHandler } from './handlers/ClipHandler'
 import { JoinSoundHandler } from './handlers/JoinSoundHandler'
 import { PollingJob } from './handlers/PollingJob'
@@ -374,11 +375,19 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
-    // Auto group: !autox2 / !autox4 / !autox5 with optional mentions and --exclude [hero list]
+    // Auto group: !autox2 / !autox4 / !autox5 with optional mentions, --exclude [hero list], and --reset
     const autoCommandMatch = message.content.match(/^!autox([245])\b/i)
     if (autoCommandMatch) {
       const size = autoCommandMatch[1] === '4' ? 4 : autoCommandMatch[1] === '5' ? 5 : 2
-      const excludeMatch = message.content.match(/--exclude\s+(.+)/i)
+
+      // Strip --reset from content before the rest of the parsing so it does not confuse --exclude/mentions
+      const resetMatch = /\s--reset\b/i.test(message.content)
+      const cleanedContent = message.content.replace(/\s--reset\b/gi, '')
+      if (resetMatch) {
+        clearRecentHeroes(message.channel.id)
+      }
+
+      const excludeMatch = cleanedContent.match(/--exclude\s+(.+)/i)
       const blockedHeroNames = excludeMatch ? parseHeroList(excludeMatch[1]) : []
       const blockedHeroIds: number[] = []
       const unknownHeroes: string[] = []

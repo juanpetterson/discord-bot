@@ -2,6 +2,7 @@ import { Message, GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Bu
 import { t } from '../i18n'
 import { askAI, heroPickPrompt } from '../ai'
 import { fetchDotaNick, DISCORD_TO_STEAM } from './PlayerData'
+import { getRecentHeroIds, recordDraft } from '../services/recentHeroes'
 
 // Dota 2 roles per slot index (0-4 = team A, 5-9 = team B)
 const ROLES = ['Hard Carry', 'Mid Lane', 'Offlane', 'Soft Support', 'Hard Support']
@@ -570,15 +571,18 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
         .concat(replacement)
     }
 
-    const usedHeroIds = new Set(stored.usedHeroIds ?? [])
+    let usedHeroIds = new Set(stored.usedHeroIds ?? [])
     for (const id of stored.blockedHeroIds ?? []) {
       usedHeroIds.add(id)
     }
 
     const heroes: any[] = require('../assets/data/heroes.json')
     if (heroes.filter((hero: any) => !usedHeroIds.has(hero.id)).length < nextPlayers.length) {
-      await interaction.followUp({ content: t('group.fearlessNoHeroesLeft'), ephemeral: true })
-      return
+      // Pool exhausted — reset session history so Fearless can keep going.
+      // Permanently-blocked heroes (e.g. !autox --exclude) are preserved.
+      stored.usedHeroIds = []
+      usedHeroIds = new Set(stored.blockedHeroIds ?? [])
+      console.log('[GroupHandler] Fearless pool exhausted — auto-reset usedHeroIds')
     }
 
     const shuffledPlayers = GroupHandler._shuffle(nextPlayers)
@@ -684,7 +688,7 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
 
     try {
       const prompt = heroPickPrompt({ size, roles: allRoles, heroPool: availableHeroes })
-      const raw = await askAI(prompt, 300, 0.4)
+      const raw = await askAI(prompt, 300, 1.0)
 
       if (raw) {
         // Extract JSON — strip any markdown fences the model might add
@@ -736,7 +740,7 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
           h.roles.some((r: string) => preferred.includes(r))
         )
         const pool = matching.length > 0 ? matching : available
-        const hero = pool[Math.floor(Math.random() * pool.length)]
+        const hero = GroupHandler._shuffle(pool)[0]
         usedHeroIds.add(hero.id)
         return hero
       }
@@ -778,11 +782,12 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
     // Reset re-roll votes whenever new heroes are assigned
     rerollVotes.delete(interaction.channel.id)
 
+    const assignedHeroIds = [...assignA!, ...assignB!].map((assignment) => assignment.hero.id)
     const stored = lastTeams.get(interaction.channel.id)
     if (stored) {
-      const assignedHeroIds = [...assignA!, ...assignB!].map((assignment) => assignment.hero.id)
       stored.usedHeroIds = Array.from(new Set([...(stored.usedHeroIds ?? []), ...assignedHeroIds]))
     }
+    recordDraft(interaction.channel.id, assignedHeroIds)
 
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -965,13 +970,18 @@ Responda apenas com JSON: {"goodTeam": "Nome Bom", "badTeam": "Nome Ruim"}`
     }
     activeGroups.set(channelId, group)
 
+    // Merge persisted recent-heroes history (per channel) so consecutive !autox runs
+    // do not produce drafts dominated by the same heroes.
+    const recentBlocked = getRecentHeroIds(channelId)
+    const effectiveBlocked = Array.from(new Set([...blockedHeroIds, ...recentBlocked]))
+
     // Store teams
     lastTeams.set(channelId, {
       teamA,
       teamB,
       teamATitle,
       teamBTitle,
-      blockedHeroIds,
+      blockedHeroIds: effectiveBlocked,
       autoGroup: {
         sourceVoiceChannelId: voiceChannel.id,
         excludedIds: Array.from(excludedIds),

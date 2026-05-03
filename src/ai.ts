@@ -76,6 +76,7 @@ export function heroPickPrompt(opts: {
     .join('\n')
 
   const roleList = roles.map((r, i) => `${i + 1}. ${r}`).join('\n')
+  const seed = Math.random().toString(16).slice(2, 8)
 
   return `You are a Dota 2 expert drafter. Assign heroes for a ${size}v${size} match.
 
@@ -89,7 +90,9 @@ Rules:
 - Pick heroes genuinely suitable for each role (e.g. Anti-Mage for Hard Carry, Crystal Maiden for Hard Support)
 - No hero may appear more than once across both teams
 - Only use hero names exactly as written in the pool above
-- Vary the picks — do not always pick the most popular heroes
+- Vary the picks across drafts — avoid defaulting to the most popular meta heroes; mix in less common picks from the pool
+
+Variability seed: ${seed}
 
 Respond with ONLY valid JSON, no explanation, no markdown:
 {"teamA":["Hero1","Hero2"...],"teamB":["Hero1","Hero2"...]}`

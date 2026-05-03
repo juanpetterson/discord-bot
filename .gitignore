@@ -6,3 +6,6 @@ dist
 /src/assets/data/quotes.json
 /src/assets/data/dota-nicks.json
 /src/assets/data/polling-state.json
+.claude
+openspec
+/data
