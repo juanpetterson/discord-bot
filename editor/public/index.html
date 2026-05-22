@@ -265,7 +265,8 @@
         const FFmpegCtor = (window.FFmpegWASM && window.FFmpegWASM.FFmpeg) || (window.FFmpeg && window.FFmpeg.FFmpeg);
         if (!FFmpegCtor) throw new Error('ffmpeg.wasm not loaded');
         const inst = new FFmpegCtor();
-        const coreBase = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/umd';
+        // core-mt ships its files under /dist/esm/ (not /dist/umd/).
+        const coreBase = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm';
         // The classWorkerURL points to ffmpeg.wasm's own internal Worker chunk
         // (814.ffmpeg.js for 0.12.10). Under COEP: require-corp, the Worker
         // constructor blocks cross-origin scripts — route it through a Blob URL.
