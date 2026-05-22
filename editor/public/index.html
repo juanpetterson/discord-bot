@@ -299,7 +299,9 @@
       const ext = currentSourceExt;
       const inputName = 'input.' + ext;
       const outputName = 'output.' + ext;
-      await ff.writeFile(inputName, currentSourceBytes);
+      // Pass a copy: ffmpeg transfers the ArrayBuffer to its worker (detaching
+      // the original), so reusing currentSourceBytes for a second export would fail.
+      await ff.writeFile(inputName, currentSourceBytes.slice());
       const args = [
         '-ss', String(start),
         '-to', String(end),
