@@ -58,12 +58,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const message = await msgResponse.json();
-    const attachment = (message.attachments || []).find(
-      (a: any) => a.filename === filename && a.content_type?.startsWith('audio/')
-    );
+    const attachment = (message.attachments || []).find((a: any) => {
+      if (a.filename !== filename) return false;
+      const ct = a.content_type || '';
+      const name = (a.filename || '').toLowerCase();
+      return ct.startsWith('audio/') || ct === 'application/zip' || name.endsWith('.zip');
+    });
 
     if (!attachment) {
-      return res.status(404).json({ error: 'Audio attachment not found' });
+      return res.status(404).json({ error: 'Attachment not found' });
     }
 
     // Fetch the actual audio file from Discord CDN

@@ -50,15 +50,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const message = await response.json();
     const attachments = (message.attachments || [])
-      .filter((a: any) => a.content_type?.startsWith('audio/'))
+      .filter((a: any) => {
+        const ct = a.content_type || '';
+        const name = (a.filename || '').toLowerCase();
+        return ct.startsWith('audio/') || ct === 'application/zip' || name.endsWith('.zip');
+      })
       .map((a: any) => ({
         filename: a.filename,
         url: a.url,
         size: a.size,
+        content_type: a.content_type,
       }));
 
     if (attachments.length === 0) {
-      return res.status(404).json({ error: 'No audio attachments found' });
+      return res.status(404).json({ error: 'No audio or zip attachments found' });
     }
 
     // Cache for 5 minutes (attachment signing URLs are valid for hours)

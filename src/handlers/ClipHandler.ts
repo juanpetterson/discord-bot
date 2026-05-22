@@ -390,19 +390,24 @@ export class ClipHandler {
 
       const clipButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(clipButton, trimButton);
 
-      const totalSize = filesToSend.reduce((sum, f) => sum + fs.statSync(f).size, 0);
+      // Bundle all tracks into a single ZIP so the channel doesn't get a
+      // wall of inline audio players (one per attachment).
+      const zipPath = path.join(clipDir, `clip_${timestamp}.zip`);
+      await ClipHandler.createZip(filesToSend, zipPath);
+
+      const zipSize = fs.statSync(zipPath).size;
       const maxSize = 25 * 1024 * 1024;
 
-      if (totalSize > maxSize) {
+      if (zipSize > maxSize) {
         await statusMsg.edit(
-          `⚠️ The clip files are too large to upload (${(totalSize / 1024 / 1024).toFixed(1)}MB). Files saved locally at: \`${clipDir}\``
+          `⚠️ The clip ZIP is too large to upload (${(zipSize / 1024 / 1024).toFixed(1)}MB). Files saved locally at: \`${clipDir}\``
         );
         return;
       }
 
       const sentMessage = await message.channel.send({
-        content: `🎙️ **Voice Clip** (last 60 seconds)\n👥 **Recorded:** ${userList}\n📁 Mixed MP3 + individual tracks`,
-        files: filesToSend,
+        content: `🎙️ **Voice Clip** (last 60 seconds)\n👥 **Recorded:** ${userList}\n📦 Mixed MP3 + individual tracks (zipped)`,
+        files: [zipPath],
         components: [clipButtonRow],
       });
 
