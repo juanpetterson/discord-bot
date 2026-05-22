@@ -266,9 +266,14 @@
         if (!FFmpegCtor) throw new Error('ffmpeg.wasm not loaded');
         const inst = new FFmpegCtor();
         const coreBase = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/umd';
+        // The classWorkerURL points to ffmpeg.wasm's own internal Worker chunk
+        // (814.ffmpeg.js for 0.12.10). Under COEP: require-corp, the Worker
+        // constructor blocks cross-origin scripts — route it through a Blob URL.
+        const ffmpegBase = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
         const toBlobURL = (window.FFmpegUtil && window.FFmpegUtil.toBlobURL) || window.toBlobURL;
         if (!toBlobURL) throw new Error('ffmpeg-util not loaded');
         await inst.load({
+          classWorkerURL: await toBlobURL(ffmpegBase + '/814.ffmpeg.js', 'text/javascript'),
           coreURL: await toBlobURL(coreBase + '/ffmpeg-core.js', 'text/javascript'),
           wasmURL: await toBlobURL(coreBase + '/ffmpeg-core.wasm', 'application/wasm'),
           workerURL: await toBlobURL(coreBase + '/ffmpeg-core.worker.js', 'text/javascript'),
