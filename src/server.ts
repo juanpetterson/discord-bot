@@ -4,6 +4,7 @@ import fs from 'fs'
 
 import { client } from './index'
 import { ClipHandler } from './handlers/ClipHandler'
+import { NOTIFY_CHANNEL_ID, DAILY_MESSAGE, DAILY_MESSAGE_HOUR } from './config'
 
 const server = express()
 server.use(express.json())
@@ -18,15 +19,16 @@ server.all('/', (req, res) => {
   const currentTimeMinutes = new Date().getMinutes()
 
   if (
-    currentTimeHours === 11 &&
+    DAILY_MESSAGE &&
+    currentTimeHours === DAILY_MESSAGE_HOUR &&
     currentTimeMinutes >= 0 &&
     currentTimeMinutes <= 5
   ) {
-    const channel = client.channels.cache.get('1003668690052587623') as any
+    const channel = client.channels.cache.get(NOTIFY_CHANNEL_ID) as any
 
     if (!channel) return
 
-    channel.send('🦧  <- jaque')
+    channel.send(DAILY_MESSAGE)
   }
 
   res.send('Bot is running')

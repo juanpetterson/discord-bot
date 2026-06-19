@@ -57,7 +57,8 @@ import {
   Events,
   GuildMember,
   GuildMemberManager,
-  VoiceState
+  VoiceState,
+  Presence
 } from 'discord.js'
 import fs from 'fs'
 import https from 'https';
@@ -79,6 +80,11 @@ import { RoastHandler } from './handlers/RoastHandler'
 import { PollHandler } from './handlers/PollHandler'
 import { BetHandler } from './handlers/BetHandler'
 import { GroupHandler } from './handlers/GroupHandler'
+import { InhouseHandler } from './handlers/InhouseHandler'
+import { counterPickPrompt, askAI } from './ai'
+import { t, LANG } from './i18n'
+import { NOTIFY_CHANNEL_ID } from './config'
+import { DISCORD_TO_STEAM, fetchDotaNick } from './handlers/PlayerData'
 import { clearRecentHeroes } from './services/recentHeroes'
 import { ClipHandler } from './handlers/ClipHandler'
 import { JoinSoundHandler } from './handlers/JoinSoundHandler'
@@ -136,6 +142,7 @@ export const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildPresences,
   ],
   partials: [Partials.Channel],
 })
@@ -146,7 +153,7 @@ client.once('clientReady', (c: any) => {
 })
 
 client.on('custom-message', (message: string) => {
-  const channel = client.channels.cache.get('1003668690052587623') as any
+  const channel = client.channels.cache.get(NOTIFY_CHANNEL_ID) as any
 
   if (!channel) return
 
@@ -185,6 +192,53 @@ client.on(Events.VoiceStateUpdate, async (oldState: VoiceState, newState: VoiceS
         VoiceHandler.executeVoice(channel, filePath);
       }
       await GroupHandler.handleVoiceJoin(user.id, newState.channelId, client);
+    }
+  }
+});
+
+const lastBetAlert = new Map<string, number>();
+
+client.on(Events.PresenceUpdate, async (oldPresence: Presence | null, newPresence: Presence) => {
+  if (!newPresence || !newPresence.user) return;
+  const username = newPresence.user.username;
+  const steamId = DISCORD_TO_STEAM[username];
+  if (!steamId) return;
+
+  const oldActivities = oldPresence?.activities ?? [];
+  const newActivities = newPresence.activities ?? [];
+
+  const wasPlayingDota = oldActivities.some(act => act.name.toLowerCase() === 'dota 2');
+  const isPlayingDota = newActivities.some(act => act.name.toLowerCase() === 'dota 2');
+
+  if (isPlayingDota && !wasPlayingDota) {
+    // Check cooldown to avoid spamming (45 minutes)
+    const now = Date.now();
+    const lastAlertTime = lastBetAlert.get(username) ?? 0;
+    const COOLDOWN_MS = 45 * 60 * 1000;
+    if (now - lastAlertTime < COOLDOWN_MS) {
+      return;
+    }
+    lastBetAlert.set(username, now);
+
+    const channelId = PollingJob.getResumeChannelId();
+    if (!channelId) return;
+
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (channel && channel.isTextBased()) {
+        const dotaNick = await fetchDotaNick(steamId, username);
+        const embed = new EmbedBuilder()
+          .setColor(0x00ff99)
+          .setTitle('🎮 Dota 2 Match starting!')
+          .setDescription(t('bet.liveAlert', { name: dotaNick, user: username }))
+          .setFooter({ text: 'Bet window is open!' })
+          .setTimestamp();
+
+        await (channel as any).send({ embeds: [embed] });
+        console.log(`[PresenceAlert] Sent live bet alert for ${username} (${dotaNick})`);
+      }
+    } catch (err) {
+      console.error('[PresenceAlert] Failed to send live bet alert:', err);
     }
   }
 });
@@ -375,6 +429,43 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
+    // In-House League: !inhousewin <matchId>, !inhouseboard
+    if (messageContent.startsWith('!inhousewin')) {
+      const matchId = message.content.split(' ')[1]
+      await InhouseHandler.resolveInhouse(message, matchId)
+      return
+    }
+
+    if (messageContent === '!inhouseboard') {
+      InhouseHandler.showLeaderboard(message)
+      return
+    }
+
+    // Counter pick AI: !counter <hero1> <hero2> ...
+    if (messageContent.startsWith('!counter ')) {
+      const heroArgs = message.content.substring('!counter '.length).trim()
+      if (!heroArgs) {
+        message.reply('Usage: `!counter <hero1> <hero2> ...` — e.g. `!counter pudge lion crystal maiden`')
+        return
+      }
+      const opponentHeroes = heroArgs.split(/[,\s]+/).map(h => h.trim()).filter(Boolean)
+      await message.channel.send('🤖 Analyzing enemy draft...')
+      const prompt = counterPickPrompt({ lang: LANG as any, opponentHeroes })
+      const response = await askAI(prompt, 500, 0.8)
+      if (response) {
+        const embed = new EmbedBuilder()
+          .setColor(0x9b59b6)
+          .setTitle(`⚔️ Counter-pick Analysis`)
+          .setDescription(`**Enemy draft:** ${opponentHeroes.join(', ')}\n\n${response}`)
+          .setFooter({ text: 'Powered by Groq AI · Dota 2 Draft Helper' })
+          .setTimestamp()
+        message.channel.send({ embeds: [embed] })
+      } else {
+        message.reply('❌ AI is unavailable right now. Set `GROQ_API_KEY` in your `.env` to enable counter-pick analysis.')
+      }
+      return
+    }
+
     // Auto group: !autox2 / !autox4 / !autox5 with optional mentions, --exclude [hero list], and --reset
     const autoCommandMatch = message.content.match(/^!autox([245])\b/i)
     if (autoCommandMatch) {
@@ -450,6 +541,8 @@ client.on('messageCreate', async (message: Message) => {
         .addFields(
           { name: '🎵 Sound', value: '`!play <name>` — Play a sound\n`!sounds` — List sounds (slash)', inline: false },
           { name: '🎮 Dota 2', value: '`!random <count/players>` — Randomize heroes\n`!lastmatch [@user|nick]` — Last 10 match analysis\n`!match <steam_id>` — Last match recap (legacy)\n`!resumedoday` — Day summary (wins/losses all players)\n`!resumedolastday` — Yesterday summary\n`!resumedolastweek` — Last 7 days summary', inline: false },
+          { name: '⚔️ In-House League', value: '`!inhousewin <matchId>` — Register an in-house match result & update ELO\n`!inhouseboard` — View in-house ELO leaderboard', inline: false },
+          { name: '🤖 AI Draft Helper', value: '`!counter <hero1> <hero2> ...` — Get AI counter-pick suggestions for an enemy draft\ne.g. `!counter pudge lion crystal maiden`', inline: false },
           { name: '🔫 Kick', value: '`!randomkick` — Russian roulette (random kick)\n`!votekick <nick>` — Start a votekick\n`!voteyes` — Vote yes on active votekick', inline: false },
           { name: '🎙️ Clip', value: '`!clip` — Save the last 60 seconds of voice chat as MP3 + individual tracks ZIP', inline: false },
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },

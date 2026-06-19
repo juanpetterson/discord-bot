@@ -1,0 +1,4 @@
+{
+  "_comment": "Maps a Discord username (or user ID) to a sound file in src/assets/uploads played when that user joins a voice channel. Copy this file to join-sounds.json. Entries are also created/updated at runtime by the bot's set-join-sound command.",
+  "some_discord_username": "author - my sound.mp3"
+}

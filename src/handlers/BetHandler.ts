@@ -204,6 +204,26 @@ export class BetHandler {
         continue
       }
 
+      // Timing verification
+      const betTimeSeconds = Math.floor(new Date(bet.timestamp).getTime() / 1000)
+      const matchStartTimeSeconds = match.start_time
+      const diffSeconds = betTimeSeconds - matchStartTimeSeconds
+      
+      const isTurbo = match.game_mode === 23
+      const limitSeconds = isTurbo ? 300 : 600
+
+      if (diffSeconds > limitSeconds) {
+        results.push(
+          t('bet.resolveVoided', {
+            bettor: bet.bettorDisplayName ?? bet.bettorName,
+            target: bet.targetDotaNick ?? bet.targetName,
+            time: Math.floor(diffSeconds / 60)
+          })
+        )
+        data.activeBets = data.activeBets.filter((b) => b.bettorId !== bet.bettorId)
+        continue
+      }
+
       const isRadiant = player.player_slot < 128
       const didWin: boolean = isRadiant ? match.radiant_win : !match.radiant_win
       const betWon = (bet.prediction === 'win' && didWin) || (bet.prediction === 'lose' && !didWin)

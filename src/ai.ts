@@ -392,3 +392,24 @@ Write 3-5 short roast lines about this player using their REAL stats as ammuniti
 Player: ${name}
 Stats (last ${total} games): ${wins}W/${total - wins}L (${winRate}% winrate), avg ${avgDeaths} deaths/game, avg ${avgKDA} KDA, favourite hero: ${favHero}, current streak: ${streakStr}, worst single game: ${worstDeaths} deaths, games with 10+ deaths: ${feedGames}`
 }
+
+/** Prompt for AI-powered counter picks */
+export function counterPickPrompt(opts: {
+  lang: 'pt-br' | 'en-us'
+  opponentHeroes: string[]
+}): string {
+  const { lang, opponentHeroes } = opts
+  const langInstruction = lang === 'pt-br'
+    ? 'Responda APENAS em português brasileiro. Use gírias e humor típico de jogadores de Dota brasileiros.'
+    : 'Respond ONLY in English. Use gamer slang.'
+
+  return `You are a professional Dota 2 coach and draft analyst. ${langInstruction}
+
+Provide a concise, strategic analysis of how to counter this opponent draft: ${opponentHeroes.join(', ')}.
+
+Your response should contain:
+1. 🛡️ **Counter Picks:** Suggest 3-5 heroes that are excellent counters to their draft, explaining briefly why.
+2. 💡 **Strategy & Items:** Suggest key items (e.g. BKB, Pipe, Crimson, Halberd) or strategic playstyles to focus on (e.g. push early, play for late game, split push).
+
+Keep the advice practical, high-impact, and easy to read in a Discord embed.`
+}

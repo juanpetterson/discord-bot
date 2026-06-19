@@ -1,23 +1,15 @@
 import fs from 'fs'
 import https from 'https'
+import { loadDataFile } from '../config'
 
 // ─── Steam ↔ Discord user map ─────────────────────────────────────────────
-// Key: Discord user ID | Value: Steam32 account ID (not 64-bit)
-export const DISCORD_TO_STEAM: Record<string, string> = {
-  'carlesso2154': '137839730',
-  'jacksonmajolo': '117092439',
-  'gbonassina': '109723713',
-  'cristiano.bonassina': '102605845',
-  'eradim': '18354196',
-  'dedableo': '1290315073',
-  'juanpetterson.': '89756583',
-  'arlovas': '65463725',
-  'fermino': '89331213',
-  'matheusagnes': '18344803',
-  '.jogador.' : '96204401',
-  'j14070' : '105610618',
-  'xgrahl' : '51878986'
-}
+// Key: Discord username | Value: Steam32 account ID (not 64-bit)
+// Loaded from src/assets/data/players.json (gitignored). See players.example.json.
+export const DISCORD_TO_STEAM: Record<string, string> = Object.fromEntries(
+  Object.entries(loadDataFile<Record<string, string>>('players.json', {})).filter(
+    ([key]) => !key.startsWith('_')
+  )
+)
 
 // ─── Dota 2 nick cache ───────────────────────────────────────────────────
 

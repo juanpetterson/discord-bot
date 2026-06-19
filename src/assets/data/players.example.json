@@ -1,0 +1,5 @@
+{
+  "_comment": "Maps a Discord username to a Dota 2 Steam32 account ID. Copy this file to players.json and fill in your community's data. The Steam32 ID is the number shown in your Dotabuff/OpenDota profile URL (https://www.opendota.com/players/<steam32>).",
+  "some_discord_username": "123456789",
+  "another_discord_username": "987654321"
+}

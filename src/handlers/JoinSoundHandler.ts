@@ -7,16 +7,10 @@ const PREFIX_SEPARATOR = ' - '
 
 type JoinSoundMap = Record<string, string>
 
-const LEGACY_JOIN_SOUNDS: JoinSoundMap = {
-  carlesso2154: 'dw - tananana nananan.mp3',
-  jacksonmajolo: 'geral - pode mamar.mp3',
-  gbonassina: 'gre - ó o je me empurrando.ogg',
-  'cristiano.bonassina': 'cris - boooa gurizada.mp3',
-  eradim: 'rafiki - aiiiii gre.ogg',
-  wellfb: 'sido - ja tem tornado ja de novo.ogg',
-  dedableo: 'dw - um bilhao de dano.mp3',
-  'juanpetterson.': 'binho - aiii rurrroor.ogg',
-}
+// Default join sounds are community-specific and therefore not hardcoded.
+// They live in src/assets/data/join-sounds.json (gitignored) — see
+// join-sounds.example.json. Entries can also be set at runtime via command.
+const LEGACY_JOIN_SOUNDS: JoinSoundMap = {}
 
 interface SoundMatch {
   fileName: string | null
@@ -120,7 +114,8 @@ function loadJoinSounds(): JoinSoundMap {
 
   try {
     const parsed = JSON.parse(fs.readFileSync(JOIN_SOUNDS_FILE, 'utf-8')) as JoinSoundMap
-    return { ...LEGACY_JOIN_SOUNDS, ...parsed }
+    const cleaned = Object.fromEntries(Object.entries(parsed).filter(([key]) => !key.startsWith('_')))
+    return { ...LEGACY_JOIN_SOUNDS, ...cleaned }
   } catch {
     return { ...LEGACY_JOIN_SOUNDS }
   }

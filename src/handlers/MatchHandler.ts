@@ -1041,6 +1041,12 @@ export class MatchHandler {
     const dayLabel = MatchHandler.modeLabel(mode)
     channel.send(t('resume.fetching'))
 
+    interface MatchRecord {
+      playerName: string
+      match: RecentMatch
+    }
+    const allRecords: MatchRecord[] = []
+
     // Determine the target day boundaries in BRT (America/Sao_Paulo, UTC-3).
     // The server may run in UTC (Docker), but users are in Brazil, so we must
     // compute "today" / "yesterday" relative to Brazilian time.
@@ -1124,6 +1130,7 @@ export class MatchHandler {
         const turbo = { wins: 0, losses: 0, total: 0 }
 
         for (const m of dayMatches) {
+          allRecords.push({ playerName, match: m })
           const isRadiant = m.player_slot < 128
           const won = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)
           const bucketType = isTurboMatch(m) ? 'turbo' : (isRankedMatch(m) ? 'ranked' : 'normal')
@@ -1231,12 +1238,79 @@ export class MatchHandler {
       points: totalPoints,
     })
 
+    // Calculate awards
+    let maxDeathsRecord: MatchRecord | null = null
+    let maxKillsRecord: MatchRecord | null = null
+    let maxGpmRecord: MatchRecord | null = null
+    let maxHealingRecord: MatchRecord | null = null
+    let maxAssistsRecord: MatchRecord | null = null
+
+    for (const r of allRecords) {
+      if (r.match.deaths >= 10 && (!maxDeathsRecord || r.match.deaths > maxDeathsRecord.match.deaths)) {
+        maxDeathsRecord = r
+      }
+      if (r.match.kills >= 8 && (!maxKillsRecord || r.match.kills > maxKillsRecord.match.kills)) {
+        maxKillsRecord = r
+      }
+      if (r.match.gold_per_min >= 500 && (!maxGpmRecord || r.match.gold_per_min > maxGpmRecord.match.gold_per_min)) {
+        maxGpmRecord = r
+      }
+      if (r.match.hero_healing >= 1000 && (!maxHealingRecord || r.match.hero_healing > maxHealingRecord.match.hero_healing)) {
+        maxHealingRecord = r
+      }
+      if (r.match.assists >= 15 && (!maxAssistsRecord || r.match.assists > maxAssistsRecord.match.assists)) {
+        maxAssistsRecord = r
+      }
+    }
+
+    const awardLines: string[] = []
+    if (maxDeathsRecord) {
+      awardLines.push(t('resume.awardFeed', {
+        name: maxDeathsRecord.playerName,
+        val: maxDeathsRecord.match.deaths,
+        hero: heroName(maxDeathsRecord.match.hero_id)
+      }))
+    }
+    if (maxKillsRecord) {
+      awardLines.push(t('resume.awardKills', {
+        name: maxKillsRecord.playerName,
+        val: maxKillsRecord.match.kills,
+        hero: heroName(maxKillsRecord.match.hero_id)
+      }))
+    }
+    if (maxGpmRecord) {
+      awardLines.push(t('resume.awardGpm', {
+        name: maxGpmRecord.playerName,
+        val: maxGpmRecord.match.gold_per_min,
+        hero: heroName(maxGpmRecord.match.hero_id)
+      }))
+    }
+    if (maxHealingRecord) {
+      awardLines.push(t('resume.awardHealing', {
+        name: maxHealingRecord.playerName,
+        val: maxHealingRecord.match.hero_healing,
+        hero: heroName(maxHealingRecord.match.hero_id)
+      }))
+    }
+    if (maxAssistsRecord) {
+      awardLines.push(t('resume.awardAssists', {
+        name: maxAssistsRecord.playerName,
+        val: maxAssistsRecord.match.assists,
+        hero: heroName(maxAssistsRecord.match.hero_id)
+      }))
+    }
+
     const embed = new EmbedBuilder()
       .setColor(totalWins >= totalLosses ? 0x57f287 : 0xed4245)
       .setTitle(MatchHandler.modeTitle(mode, dayLabel))
       .setDescription(lines.join('\n\n'))
       .addFields({ name: t('resume.totalFieldTitle'), value: totalLine, inline: false })
-      .setFooter({ text: t('resume.footer') })
+
+    if (awardLines.length > 0) {
+      embed.addFields({ name: t('resume.awardTitle'), value: awardLines.join('\n'), inline: false })
+    }
+
+    embed.setFooter({ text: t('resume.footer') })
       .setTimestamp()
 
     channel.send({ embeds: [embed], components: [MatchHandler.buildResumeButtons()] })

@@ -93,6 +93,10 @@ export class PollingJob {
     lastNickRefresh: 0,
   }
 
+  static getResumeChannelId(): string | null {
+    return PollingJob.state.resumeChannelId
+  }
+
   /**
    * Start the polling job.
    * Call this inside client.once('clientReady', ...).
