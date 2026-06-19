@@ -36,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: 'Invalid editor signature' });
   }
 
-  const { author, soundName, audioBase64 } = req.body || {};
+  const { author, soundName, audioBase64, ext, mime } = req.body || {};
 
   if (!author || !soundName || !audioBase64) {
     return res.status(400).json({ error: 'Missing author, soundName, or audioBase64' });
@@ -49,6 +49,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (author.length > 50 || soundName.length > 100) {
     return res.status(400).json({ error: 'Author or sound name too long' });
   }
+
+  const ALLOWED_EXTS: Record<string, string> = {
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    m4a: 'audio/mp4',
+  };
+  const rawExt = (typeof ext === 'string' ? ext : 'mp3').toLowerCase().replace(/^\./, '');
+  if (!ALLOWED_EXTS[rawExt]) {
+    return res.status(400).json({ error: 'Unsupported audio extension' });
+  }
+  const safeExt = rawExt;
+  const safeMime = typeof mime === 'string' && mime.startsWith('audio/') ? mime : ALLOWED_EXTS[safeExt];
 
   // Preserve Unicode letters/accents; strip only path-dangerous chars
   const sanitize = (s: string) => s
@@ -73,12 +86,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Bot token not configured' });
   }
 
-  const fileName = `${safeAuthor} - ${safeName}.wav`;
+  const fileName = `${safeAuthor} - ${safeName}.${safeExt}`;
 
   try {
     // Upload to Discord as a message attachment in the same channel
     const formData = new FormData();
-    const blob = new Blob([audioBuffer], { type: 'audio/wav' });
+    const blob = new Blob([audioBuffer], { type: safeMime });
     formData.append('files[0]', blob, fileName);
     formData.append('payload_json', JSON.stringify({
       content: `🔊 **Sound Upload** from Web Editor\n📁 \`${fileName}\`\n⚙️ _Processing..._`,

@@ -236,15 +236,90 @@
 
   <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+  <!-- ffmpeg.wasm (UMD) — pinned. Requires COOP/COEP headers (set in vercel.json) for SharedArrayBuffer threading. -->
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js" crossorigin="anonymous"></script>
+  <!-- JSZip for unpacking the clip bundle (one ZIP attachment instead of N per-track audio attachments). -->
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
   <script>
     let wavesurfer = null;
     let regionsPlugin = null;
     let activeRegion = null;
-    let tracks = []; // [{label, url, filename}]
+    let tracks = []; // legacy: [{label, url, filename}]  /  new ZIP: [{label, filename, bytes, mime, ext}]
     let currentAudioBuffer = null;
+    let currentSourceBytes = null;   // Uint8Array of the original encoded audio
+    let currentSourceMime = null;    // e.g. "audio/mpeg"
+    let currentSourceExt = null;     // e.g. "mp3"
+    let currentBlobUrl = null;       // object URL fed to WaveSurfer when bytes are in-memory
     let clipChannelId = null;
     let clipMessageId = null;
     let clipSignature = null;
+
+    // ffmpeg.wasm singleton
+    let ffmpegInstance = null;
+    let ffmpegLoading = null;
+    async function getFfmpeg() {
+      if (ffmpegInstance) return ffmpegInstance;
+      if (ffmpegLoading) return ffmpegLoading;
+      ffmpegLoading = (async () => {
+        const FFmpegCtor = (window.FFmpegWASM && window.FFmpegWASM.FFmpeg) || (window.FFmpeg && window.FFmpeg.FFmpeg);
+        if (!FFmpegCtor) throw new Error('ffmpeg.wasm not loaded');
+        const inst = new FFmpegCtor();
+        // core-mt ships its files under /dist/esm/ (not /dist/umd/).
+        const coreBase = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm';
+        // The classWorkerURL points to ffmpeg.wasm's own internal Worker chunk
+        // (814.ffmpeg.js for 0.12.10). Under COEP: require-corp, the Worker
+        // constructor blocks cross-origin scripts — route it through a Blob URL.
+        const ffmpegBase = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
+        const toBlobURL = (window.FFmpegUtil && window.FFmpegUtil.toBlobURL) || window.toBlobURL;
+        if (!toBlobURL) throw new Error('ffmpeg-util not loaded');
+        await inst.load({
+          classWorkerURL: await toBlobURL(ffmpegBase + '/814.ffmpeg.js', 'text/javascript'),
+          coreURL: await toBlobURL(coreBase + '/ffmpeg-core.js', 'text/javascript'),
+          wasmURL: await toBlobURL(coreBase + '/ffmpeg-core.wasm', 'application/wasm'),
+          workerURL: await toBlobURL(coreBase + '/ffmpeg-core.worker.js', 'text/javascript'),
+        });
+        ffmpegInstance = inst;
+        return inst;
+      })();
+      try {
+        return await ffmpegLoading;
+      } catch (err) {
+        ffmpegLoading = null;
+        throw err;
+      }
+    }
+
+    // Lossless trim via stream-copy. Returns { bytes, mime, ext }.
+    async function buildTrimmedClip(start, end) {
+      if (!currentSourceBytes || !currentSourceExt) {
+        throw new Error('Original audio bytes not loaded');
+      }
+      const ff = await getFfmpeg();
+      const ext = currentSourceExt;
+      const inputName = 'input.' + ext;
+      const outputName = 'output.' + ext;
+      // Pass a copy: ffmpeg transfers the ArrayBuffer to its worker (detaching
+      // the original), so reusing currentSourceBytes for a second export would fail.
+      await ff.writeFile(inputName, currentSourceBytes.slice());
+      const args = [
+        '-ss', String(start),
+        '-to', String(end),
+        '-i', inputName,
+        '-c', 'copy',
+        '-y',
+        outputName,
+      ];
+      const code = await ff.exec(args);
+      if (code !== 0) {
+        try { await ff.deleteFile(inputName); } catch (_) {}
+        throw new Error('ffmpeg trim failed (exit ' + code + ')');
+      }
+      const out = await ff.readFile(outputName);
+      try { await ff.deleteFile(inputName); } catch (_) {}
+      try { await ff.deleteFile(outputName); } catch (_) {}
+      return { bytes: out, mime: currentSourceMime || 'audio/mpeg', ext };
+    }
 
     const trackSelect = document.getElementById('track-select');
     const btnPreview = document.getElementById('btn-preview');
@@ -359,11 +434,72 @@
           return;
         }
 
-        tracks = data.attachments.map(a => ({
-          label: deriveTrackLabel(a.filename),
-          url: a.url,
-          filename: a.filename,
-        }));
+        // Prefer a ZIP attachment if present (new clip format). Fall back to per-track
+        // audio attachments for legacy clip messages.
+        const zipAttachment = data.attachments.find(a => /\.zip$/i.test(a.filename));
+
+        if (zipAttachment) {
+          infoText.textContent = 'Downloading clip bundle...';
+          try {
+            let zipProxyUrl = '/api/proxy?c=' + encodeURIComponent(clipChannelId) +
+              '&m=' + encodeURIComponent(clipMessageId) +
+              '&f=' + encodeURIComponent(zipAttachment.filename);
+            if (clipSignature) zipProxyUrl += '&s=' + encodeURIComponent(clipSignature);
+
+            const zr = await fetch(zipProxyUrl);
+            if (!zr.ok) throw new Error('Bundle fetch HTTP ' + zr.status);
+            const zipBuf = await zr.arrayBuffer();
+            const zip = await window.JSZip.loadAsync(zipBuf);
+
+            const entries = [];
+            zip.forEach((relPath, entry) => {
+              if (!entry.dir) entries.push(entry);
+            });
+            // Sort: mixed_* first, then alphabetical.
+            entries.sort((a, b) => {
+              const aMixed = /^mixed[_.]/i.test(a.name) ? 0 : 1;
+              const bMixed = /^mixed[_.]/i.test(b.name) ? 0 : 1;
+              if (aMixed !== bMixed) return aMixed - bMixed;
+              return a.name.localeCompare(b.name);
+            });
+
+            const extToMime = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4' };
+            tracks = [];
+            for (const entry of entries) {
+              const bytes = new Uint8Array(await entry.async('uint8array'));
+              const m = entry.name.match(/\.([a-zA-Z0-9]+)$/);
+              const ext = m ? m[1].toLowerCase() : 'mp3';
+              tracks.push({
+                label: deriveTrackLabel(entry.name),
+                filename: entry.name,
+                bytes,
+                mime: extToMime[ext] || 'audio/mpeg',
+                ext,
+              });
+            }
+
+            if (tracks.length === 0) {
+              infoText.textContent = 'Clip bundle is empty.';
+              return;
+            }
+          } catch (err) {
+            console.error('Bundle unzip error:', err);
+            infoText.textContent = 'Failed to unpack clip bundle.';
+            return;
+          }
+        } else {
+          tracks = data.attachments
+            .filter(a => /\.(mp3|wav|ogg|m4a)$/i.test(a.filename))
+            .map(a => ({
+              label: deriveTrackLabel(a.filename),
+              url: a.url,
+              filename: a.filename,
+            }));
+          if (tracks.length === 0) {
+            infoText.textContent = 'No audio tracks found in this clip.';
+            return;
+          }
+        }
 
         // Populate track selector
         trackSelect.innerHTML = '';
@@ -393,9 +529,16 @@
       btnDownload.disabled = true;
       btnUpload.disabled = true;
       currentAudioBuffer = null;
+      currentSourceBytes = null;
+      currentSourceMime = null;
+      currentSourceExt = null;
 
       if (wavesurfer) {
         wavesurfer.destroy();
+      }
+      if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl);
+        currentBlobUrl = null;
       }
 
       regionsPlugin = WaveSurfer.Regions.create();
@@ -412,9 +555,44 @@
         plugins: [regionsPlugin],
       });
 
-      let proxyUrl = '/api/proxy?c=' + encodeURIComponent(clipChannelId) + '&m=' + encodeURIComponent(clipMessageId) + '&f=' + encodeURIComponent(track.filename);
-      if (clipSignature) proxyUrl += '&s=' + encodeURIComponent(clipSignature);
-      wavesurfer.load(proxyUrl);
+      if (track.bytes) {
+        // New ZIP-sourced track: bytes are already in memory.
+        currentSourceBytes = track.bytes;
+        currentSourceMime = track.mime || 'audio/mpeg';
+        currentSourceExt = track.ext || 'mp3';
+        const blob = new Blob([track.bytes], { type: currentSourceMime });
+        currentBlobUrl = URL.createObjectURL(blob);
+        wavesurfer.load(currentBlobUrl);
+      } else {
+        // Legacy: fetch via proxy and grab bytes in parallel for export.
+        let proxyUrl = '/api/proxy?c=' + encodeURIComponent(clipChannelId) + '&m=' + encodeURIComponent(clipMessageId) + '&f=' + encodeURIComponent(track.filename);
+        if (clipSignature) proxyUrl += '&s=' + encodeURIComponent(clipSignature);
+        wavesurfer.load(proxyUrl);
+
+        (async () => {
+          try {
+            const r = await fetch(proxyUrl);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const ct = r.headers.get('Content-Type') || 'audio/mpeg';
+            const buf = await r.arrayBuffer();
+            const m = (track.filename || '').match(/\.([a-zA-Z0-9]+)$/);
+            let ext = m ? m[1].toLowerCase() : null;
+            if (!ext) {
+              if (ct.includes('mpeg')) ext = 'mp3';
+              else if (ct.includes('ogg')) ext = 'ogg';
+              else if (ct.includes('mp4')) ext = 'm4a';
+              else if (ct.includes('wav')) ext = 'wav';
+              else ext = 'mp3';
+            }
+            currentSourceBytes = new Uint8Array(buf);
+            currentSourceMime = ct;
+            currentSourceExt = ext;
+          } catch (err) {
+            console.error('Source-byte fetch failed:', err);
+            showStatus('Failed to load original audio for export.', 'error');
+          }
+        })();
+      }
 
       wavesurfer.on('ready', () => {
         waveformLoading.style.display = 'none';
@@ -473,76 +651,36 @@
       if (wavesurfer) wavesurfer.stop();
     });
 
-    btnDownload.addEventListener('click', () => {
-      if (!activeRegion || !currentAudioBuffer) {
+    btnDownload.addEventListener('click', async () => {
+      if (!activeRegion || !currentSourceBytes) {
         showStatus('No audio loaded.', 'error');
         return;
       }
+      if (activeRegion.end - activeRegion.start <= 0) {
+        showStatus('Invalid selection.', 'error');
+        return;
+      }
 
-      showStatus('Preparing trimmed audio...', 'info');
       btnDownload.disabled = true;
+      showStatus(ffmpegInstance ? 'Trimming…' : 'Loading audio engine…', 'info');
 
       try {
-        const sampleRate = currentAudioBuffer.sampleRate;
-        const numChannels = currentAudioBuffer.numberOfChannels;
-        const startSample = Math.floor(activeRegion.start * sampleRate);
-        const endSample = Math.min(Math.floor(activeRegion.end * sampleRate), currentAudioBuffer.length);
-        const numSamples = endSample - startSample;
-
-        if (numSamples <= 0) {
-          showStatus('Invalid selection.', 'error');
-          btnDownload.disabled = false;
-          return;
-        }
-
-        // Interleave channels and convert to 16-bit PCM
-        const pcm = new Int16Array(numSamples * numChannels);
-        for (let ch = 0; ch < numChannels; ch++) {
-          const channelData = currentAudioBuffer.getChannelData(ch);
-          for (let i = 0; i < numSamples; i++) {
-            const sample = Math.max(-1, Math.min(1, channelData[startSample + i]));
-            pcm[i * numChannels + ch] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-          }
-        }
-
-        // Build WAV file
-        const wavBuffer = new ArrayBuffer(44 + pcm.byteLength);
-        const view = new DataView(wavBuffer);
-
-        function writeStr(offset, str) {
-          for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-        }
-
-        writeStr(0, 'RIFF');
-        view.setUint32(4, 36 + pcm.byteLength, true);
-        writeStr(8, 'WAVE');
-        writeStr(12, 'fmt ');
-        view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true); // PCM
-        view.setUint16(22, numChannels, true);
-        view.setUint32(24, sampleRate, true);
-        view.setUint32(28, sampleRate * numChannels * 2, true);
-        view.setUint16(32, numChannels * 2, true);
-        view.setUint16(34, 16, true);
-        writeStr(36, 'data');
-        view.setUint32(40, pcm.byteLength, true);
-        new Uint8Array(wavBuffer).set(new Uint8Array(pcm.buffer), 44);
-
-        const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+        const { bytes, mime, ext } = await buildTrimmedClip(activeRegion.start, activeRegion.end);
+        const blob = new Blob([bytes], { type: mime });
         const url = URL.createObjectURL(blob);
         const trackName = tracks[parseInt(trackSelect.value, 10)]?.filename || 'clip';
+        const baseName = trackName.replace(/\.[^.]+$/, '');
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'trimmed_' + trackName.replace('.mp3', '.wav');
+        a.download = 'trimmed_' + baseName + '.' + ext;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
         showStatus('Download started!', 'success');
       } catch (err) {
         console.error('Export error:', err);
-        showStatus('Failed to export audio.', 'error');
+        showStatus('Failed to export audio: ' + (err && err.message ? err.message : 'unknown error'), 'error');
       }
 
       btnDownload.disabled = false;
@@ -571,63 +709,31 @@
         return;
       }
 
-      if (!activeRegion || !currentAudioBuffer) {
+      if (!activeRegion || !currentSourceBytes) {
         showStatus('No audio loaded.', 'error');
+        return;
+      }
+      if (activeRegion.end - activeRegion.start <= 0) {
+        showStatus('Invalid selection.', 'error');
         return;
       }
 
       uploadConfirm.disabled = true;
       uploadModal.classList.remove('active');
-      showStatus('Uploading sound...', 'info');
+      showStatus(ffmpegInstance ? 'Trimming…' : 'Loading audio engine…', 'info');
 
       try {
-        // Build WAV buffer (same logic as download)
-        const sampleRate = currentAudioBuffer.sampleRate;
-        const numChannels = currentAudioBuffer.numberOfChannels;
-        const startSample = Math.floor(activeRegion.start * sampleRate);
-        const endSample = Math.min(Math.floor(activeRegion.end * sampleRate), currentAudioBuffer.length);
-        const numSamples = endSample - startSample;
+        const { bytes, mime, ext } = await buildTrimmedClip(activeRegion.start, activeRegion.end);
 
-        if (numSamples <= 0) {
-          showStatus('Invalid selection.', 'error');
-          uploadConfirm.disabled = false;
-          return;
-        }
-
-        const pcm = new Int16Array(numSamples * numChannels);
-        for (let ch = 0; ch < numChannels; ch++) {
-          const channelData = currentAudioBuffer.getChannelData(ch);
-          for (let i = 0; i < numSamples; i++) {
-            const sample = Math.max(-1, Math.min(1, channelData[startSample + i]));
-            pcm[i * numChannels + ch] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-          }
-        }
-
-        const wavBuffer = new ArrayBuffer(44 + pcm.byteLength);
-        const view = new DataView(wavBuffer);
-        function writeStr(offset, str) {
-          for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-        }
-        writeStr(0, 'RIFF');
-        view.setUint32(4, 36 + pcm.byteLength, true);
-        writeStr(8, 'WAVE');
-        writeStr(12, 'fmt ');
-        view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true);
-        view.setUint16(22, numChannels, true);
-        view.setUint32(24, sampleRate, true);
-        view.setUint32(28, sampleRate * numChannels * 2, true);
-        view.setUint16(32, numChannels * 2, true);
-        view.setUint16(34, 16, true);
-        writeStr(36, 'data');
-        view.setUint32(40, pcm.byteLength, true);
-        new Uint8Array(wavBuffer).set(new Uint8Array(pcm.buffer), 44);
-
-        // Convert to base64
-        const bytes = new Uint8Array(wavBuffer);
+        // Convert to base64 in chunks to avoid call-stack overflow on large clips.
         let binary = '';
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const CHUNK = 0x8000;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+        }
         const audioBase64 = btoa(binary);
+
+        showStatus('Uploading sound...', 'info');
 
         let uploadUrl = '/api/upload?c=' + encodeURIComponent(clipChannelId) + '&m=' + encodeURIComponent(clipMessageId);
         if (clipSignature) uploadUrl += '&s=' + encodeURIComponent(clipSignature);
@@ -635,7 +741,7 @@
         const resp = await fetch(uploadUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ author, soundName: name, audioBase64 }),
+          body: JSON.stringify({ author, soundName: name, audioBase64, mime, ext }),
         });
 
         const data = await resp.json();
@@ -648,7 +754,7 @@
         }
       } catch (err) {
         console.error('Upload error:', err);
-        showStatus('Failed to upload sound.', 'error');
+        showStatus('Failed to upload sound: ' + (err && err.message ? err.message : 'unknown error'), 'error');
       }
 
       uploadConfirm.disabled = false;
