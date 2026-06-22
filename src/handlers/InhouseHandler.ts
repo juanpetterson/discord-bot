@@ -2,7 +2,7 @@ import { Message, EmbedBuilder } from 'discord.js'
 import fs from 'fs'
 import https from 'https'
 import { t } from '../i18n'
-import { DISCORD_TO_STEAM, fetchDotaNick } from './PlayerData'
+import { allSteamAccounts, fetchDotaNick } from './PlayerData'
 
 const INHOUSE_FILE = './src/assets/data/inhouse.json'
 
@@ -92,7 +92,7 @@ export class InhouseHandler {
     const teamAPlayers: { id: string; name: string; stats: PlayerStats }[] = []
     const teamBPlayers: { id: string; name: string; stats: PlayerStats }[] = []
 
-    for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
+    for (const { discordName, steamId } of allSteamAccounts()) {
       const accountId32 = parseInt(steamId, 10)
       const player = match.players.find((p: any) => p.account_id === accountId32)
       if (player) {

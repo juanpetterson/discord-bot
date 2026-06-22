@@ -2,7 +2,7 @@ import { Message, EmbedBuilder } from 'discord.js'
 import fs from 'fs'
 import https from 'https'
 import { t } from '../i18n'
-import { DISCORD_TO_STEAM, fetchDotaNick } from './PlayerData'
+import { DISCORD_TO_STEAM, fetchDotaNick, getSteamIdsFor } from './PlayerData'
 
 const BETS_FILE = './src/assets/data/bets.json'
 
@@ -188,18 +188,19 @@ export class BetHandler {
     const results: string[] = []
 
     for (const bet of [...data.activeBets]) {
-      const steamId = DISCORD_TO_STEAM[bet.targetName]
-      if (!steamId) {
+      const steamIds = getSteamIdsFor(bet.targetName)
+      if (steamIds.length === 0) {
         console.log(`[BetHandler] No Steam ID for ${bet.targetName} — cannot resolve`)
         results.push(t('bet.resolveSkipped', { bettor: bet.bettorName, target: bet.targetName }))
         continue
       }
 
-      const accountId32 = parseInt(steamId, 10)
-      const player = match.players.find((p: any) => p.account_id === accountId32)
+      // The target may have multiple Steam accounts — match against any of them
+      const accountIds = steamIds.map((s) => parseInt(s, 10))
+      const player = match.players.find((p: any) => accountIds.includes(p.account_id))
 
       if (!player) {
-        console.log(`[BetHandler] ${bet.targetName} (steam32: ${steamId}) not found in match ${matchId}`)
+        console.log(`[BetHandler] ${bet.targetName} (steam32: ${steamIds.join(', ')}) not found in match ${matchId}`)
         results.push(t('bet.resolveNotInMatch', { bettor: bet.bettorName, target: bet.targetName }))
         continue
       }

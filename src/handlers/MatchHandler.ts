@@ -7,7 +7,7 @@ import {
   ButtonInteraction,
   ButtonStyle,
 } from 'discord.js'
-import { DISCORD_TO_STEAM, fetchDotaNick } from './PlayerData'
+import { DISCORD_TO_STEAM, fetchDotaNick, allSteamAccounts, getSteamIdsFor, toAccountId } from './PlayerData'
 import { t, LANG } from '../i18n'
 import { askAI, matchCommentaryPrompt } from '../ai'
 
@@ -632,22 +632,48 @@ function getCommentary(ctx: CommentCtx): string {
 
 //  Steam ID resolution 
 
-function resolveSteamId(
+/** Resolves a target to ALL of its Steam accounts (mention, nick, or raw id). */
+function resolveSteamIds(
   message: Message,
   args: string
-): { steamId: string; displayName: string } | null {
+): { steamIds: string[]; displayName: string } | null {
   const mentioned = message.mentions.members?.first()
   if (mentioned) {
-    const steamId = DISCORD_TO_STEAM[mentioned.user.username]
-    if (!steamId) return null
-    return { steamId, displayName: mentioned.displayName }
+    const steamIds = getSteamIdsFor(mentioned.user.username)
+    if (steamIds.length === 0) return null
+    return { steamIds, displayName: mentioned.displayName }
   }
   if (/^\d{5,}$/.test(args))
-    return { steamId: args, displayName: `Steam ${args}` }
+    return { steamIds: [args], displayName: `Steam ${args}` }
   const lower = args.toLowerCase()
   const key = Object.keys(DISCORD_TO_STEAM).find(k => k.toLowerCase().includes(lower))
-  if (key) return { steamId: DISCORD_TO_STEAM[key], displayName: key }
+  if (key) return { steamIds: getSteamIdsFor(key), displayName: key }
   return null
+}
+
+/**
+ * Picks the Steam account with the most recent match. Used when a player has
+ * multiple accounts and a command targets just one (the default behavior).
+ */
+export async function pickMostRecentSteamId(steamIds: string[]): Promise<string> {
+  if (steamIds.length <= 1) return steamIds[0]
+  let best = steamIds[0]
+  let bestTime = -1
+  for (const sid of steamIds) {
+    try {
+      const recent: RecentMatch[] = await httpsGet(
+        `${OPENDOTA_API}/players/${toAccountId(sid)}/recentMatches`
+      )
+      const startTime = Array.isArray(recent) ? recent[0]?.start_time ?? -1 : -1
+      if (startTime > bestTime) {
+        bestTime = startTime
+        best = sid
+      }
+    } catch {
+      // ignore unreachable accounts
+    }
+  }
+  return best
 }
 
 //  Handler 
@@ -753,29 +779,41 @@ export class MatchHandler {
     await MatchHandler._fetch(message, steamId, null)
   }
 
-  /** New entry point: !lastmatch @user | <nick> */
+  /** New entry point: !lastmatch [@user|nick] [--all] */
   static async lastMatch(message: Message, args: string) {
-    const trimmed = args.trim()
+    // Extract the --all flag (show one block per account) from the args.
+    const wantsAll = /(^|\s)--all(\s|$)/.test(args)
+    const trimmed = args.replace(/(^|\s)--all(\s|$)/g, ' ').trim()
 
-    // If no args provided, look up the command author's own Steam ID
-    let resolved: { steamId: string; displayName: string } | null = null
+    // If no args provided, look up the command author's own accounts
+    let resolved: { steamIds: string[]; displayName: string } | null = null
     if (!trimmed) {
       const authorName = message.author.username
-      const steamId = DISCORD_TO_STEAM[authorName]
-        ?? DISCORD_TO_STEAM[Object.keys(DISCORD_TO_STEAM).find(k => k.toLowerCase() === authorName.toLowerCase()) ?? '']
-      if (steamId) {
-        resolved = { steamId, displayName: message.member?.displayName ?? authorName }
+      const steamIds = getSteamIdsFor(authorName)
+      if (steamIds.length > 0) {
+        resolved = { steamIds, displayName: message.member?.displayName ?? authorName }
       }
     } else {
-      resolved = resolveSteamId(message, trimmed)
+      resolved = resolveSteamIds(message, trimmed)
     }
 
-    if (!resolved) {
+    if (!resolved || resolved.steamIds.length === 0) {
       const available = Object.keys(DISCORD_TO_STEAM).join(', ')
       message.reply(t('match.notFound', { nicks: available }))
       return
     }
-    await MatchHandler._fetch(message, resolved.steamId, resolved.displayName)
+
+    if (wantsAll && resolved.steamIds.length > 1) {
+      // One block per account
+      for (const steamId of resolved.steamIds) {
+        await MatchHandler._fetch(message, steamId, resolved.displayName)
+      }
+      return
+    }
+
+    // Default: the account with the most recent match
+    const steamId = await pickMostRecentSteamId(resolved.steamIds)
+    await MatchHandler._fetch(message, steamId, resolved.displayName)
   }
 
   private static async _fetch(message: Message, steamId: string, displayName: string | null) {
@@ -1105,8 +1143,8 @@ export class MatchHandler {
     // game_mode can represent ruleset variants and may cause false "ranked" positives.
     const isRankedMatch = (m: RecentMatch) => m.lobby_type === 7 || m.lobby_type === 6
 
-    // Fetch matches for each mapped user
-    for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
+    // Fetch matches for each mapped account (one entry per Steam account)
+    for (const { discordName, steamId } of allSteamAccounts()) {
       try {
         const playerName = await fetchDotaNick(steamId, discordName)
         const recent: RecentMatch[] = await httpsGet(

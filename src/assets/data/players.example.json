@@ -1,5 +1,5 @@
 {
-  "_comment": "Maps a Discord username to a Dota 2 Steam32 account ID. Copy this file to players.json and fill in your community's data. The Steam32 ID is the number shown in your Dotabuff/OpenDota profile URL (https://www.opendota.com/players/<steam32>).",
-  "some_discord_username": "123456789",
-  "another_discord_username": "987654321"
+  "_comment": "Maps a Discord username to one or more Dota 2 Steam32 account IDs. Copy this file to players.json and fill in your community's data. Use a string for a single account, or an array for players with multiple Steam accounts. The Steam32 ID is the number in the OpenDota profile URL (https://www.opendota.com/players/<steam32>). Commands like !lastmatch and !roast use the account with the most recent match by default; pass --all (e.g. !lastmatch @user --all) to show every account.",
+  "single_account_user": "123456789",
+  "multi_account_user": ["123456789", "987654321"]
 }

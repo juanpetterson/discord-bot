@@ -1,6 +1,6 @@
 import { Message, EmbedBuilder, GuildMember } from 'discord.js'
-import { DISCORD_TO_STEAM, fetchDotaNick } from './PlayerData'
-import { MatchHandler, LastMatchFull } from './MatchHandler'
+import { DISCORD_TO_STEAM, fetchDotaNick, getSteamIdsFor } from './PlayerData'
+import { MatchHandler, LastMatchFull, pickMostRecentSteamId } from './MatchHandler'
 import { t, LANG } from '../i18n'
 import { askAI, roastPrompt, roastLastMatchPrompt } from '../ai'
 
@@ -262,10 +262,11 @@ export class RoastHandler {
     }
 
     const discordName = mention.displayName || mention.user.username
-    const steamId = DISCORD_TO_STEAM[mention.user.username]
+    const wantsAll = /(^|\s)--all(\s|$)/.test(message.content)
+    const steamIds = getSteamIdsFor(mention.user.username)
 
-    //  No Steam ID: generic roast (AI-generated if available, else pool fallback) 
-    if (!steamId) {
+    //  No Steam ID: generic roast (AI-generated if available, else pool fallback)
+    if (steamIds.length === 0) {
       const targetName = discordName
       const genericPrompt = LANG === 'pt-br'
         ? `Voc\u00ea \u00e9 um comediante de roast savage de Dota 2. Escreva 3-4 linhas de piadas sobre um jogador chamado ${targetName} que provavelmente \u00e9 ruim no Dota. Use humor brasileiro, seja espec\u00edfico e criativo. Sem cabe\u00e7alhos, sem markdown, s\u00f3 texto.`
@@ -286,7 +287,19 @@ export class RoastHandler {
       return
     }
 
-    //  Has Steam ID: fetch real stats 
+    // Multiple accounts with --all: roast each one
+    if (wantsAll && steamIds.length > 1) {
+      for (const sid of steamIds) await RoastHandler.roastAccount(message, sid, discordName)
+      return
+    }
+
+    // Default: roast the account with the most recent match
+    await RoastHandler.roastAccount(message, await pickMostRecentSteamId(steamIds), discordName)
+  }
+
+  /** Stats-based roast for one specific Steam account. */
+  private static async roastAccount(message: Message, steamId: string, discordName: string) {
+    //  Has Steam ID: fetch real stats
     // Convert Steam64  Steam32 if needed
     let accountId = steamId
     if (steamId.length >= 17)
@@ -361,8 +374,10 @@ export class RoastHandler {
   /** !roastlast [@user|nick] — deep roast of the last match */
   static async roastLastMatch(message: Message, args: string) {
     // Resolve target — mention, nick, or self
+    const wantsAll = /(^|\s)--all(\s|$)/.test(args)
+    const cleaned = args.replace(/(^|\s)--all(\s|$)/g, ' ').trim()
     const mentioned = message.mentions.members?.first()
-    let steamId: string | undefined
+    let steamIds: string[]
     let displayName: string
 
     if (mentioned) {
@@ -370,13 +385,13 @@ export class RoastHandler {
         message.reply(t('common.botCannotRoast'))
         return
       }
-      steamId = DISCORD_TO_STEAM[mentioned.user.username]
+      steamIds = getSteamIdsFor(mentioned.user.username)
       displayName = mentioned.displayName
-    } else if (args.trim()) {
-      const lower = args.trim().toLowerCase()
+    } else if (cleaned) {
+      const lower = cleaned.toLowerCase()
       const key = Object.keys(DISCORD_TO_STEAM).find(k => k.toLowerCase().includes(lower))
       if (key) {
-        steamId = DISCORD_TO_STEAM[key]
+        steamIds = getSteamIdsFor(key)
         displayName = key
       } else {
         const available = Object.keys(DISCORD_TO_STEAM).join(', ')
@@ -385,14 +400,27 @@ export class RoastHandler {
       }
     } else {
       // Roast the caller themselves
-      steamId = DISCORD_TO_STEAM[message.author.username]
+      steamIds = getSteamIdsFor(message.author.username)
       displayName = message.member?.displayName ?? message.author.username
     }
 
-    if (!steamId) {
+    if (steamIds.length === 0) {
       message.reply(t('roastlast.noSteam', { name: displayName! }))
       return
     }
+
+    // Multiple accounts with --all: roast the last match of each
+    if (wantsAll && steamIds.length > 1) {
+      for (const sid of steamIds) await RoastHandler.roastLastForAccount(message, sid, displayName)
+      return
+    }
+
+    // Default: the account with the most recent match
+    await RoastHandler.roastLastForAccount(message, await pickMostRecentSteamId(steamIds), displayName)
+  }
+
+  /** Deep roast of the last match for one specific Steam account. */
+  private static async roastLastForAccount(message: Message, steamId: string, displayName: string) {
 
     // Convert Steam64 → Steam32 if needed
     let accountId = steamId

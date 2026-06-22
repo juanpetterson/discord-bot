@@ -3,13 +3,52 @@ import https from 'https'
 import { loadDataFile } from '../config'
 
 // ─── Steam ↔ Discord user map ─────────────────────────────────────────────
-// Key: Discord username | Value: Steam32 account ID (not 64-bit)
 // Loaded from src/assets/data/players.json (gitignored). See players.example.json.
-export const DISCORD_TO_STEAM: Record<string, string> = Object.fromEntries(
-  Object.entries(loadDataFile<Record<string, string>>('players.json', {})).filter(
-    ([key]) => !key.startsWith('_')
-  )
+// Each Discord username maps to ONE Steam32 account ID OR a LIST of them
+// (for players with multiple Steam accounts):
+//   "someuser": "137839730"
+//   "altuser":  ["18354196", "987654321"]
+const RAW_PLAYERS = loadDataFile<Record<string, string | string[]>>('players.json', {})
+
+/** Discord username → list of Steam32 account IDs (always ≥1 once present). */
+export const PLAYER_ACCOUNTS: Record<string, string[]> = Object.fromEntries(
+  Object.entries(RAW_PLAYERS)
+    .filter(([key]) => !key.startsWith('_'))
+    .map(([name, value]) => [name, (Array.isArray(value) ? value : [value]).filter(Boolean)])
+    .filter(([, ids]) => ids.length > 0)
 )
+
+/**
+ * Backward-compatible map of Discord username → PRIMARY (first) Steam32 ID.
+ * Use this for display/nick lookups. For features that must cover every
+ * account, prefer allSteamAccounts() or getSteamIdsFor().
+ */
+export const DISCORD_TO_STEAM: Record<string, string> = Object.fromEntries(
+  Object.entries(PLAYER_ACCOUNTS).map(([name, ids]) => [name, ids[0]])
+)
+
+const STEAM64_BASE = BigInt('76561197960265728')
+
+/** Normalizes a Steam64 ID to a Steam32 account ID (leaves Steam32 untouched). */
+export function toAccountId(steamId: string): string {
+  return steamId.length >= 17 ? (BigInt(steamId) - STEAM64_BASE).toString() : steamId
+}
+
+/** Flat list of every (discordName, steamId) pair — one entry per account. */
+export function allSteamAccounts(): Array<{ discordName: string; steamId: string }> {
+  const out: Array<{ discordName: string; steamId: string }> = []
+  for (const [discordName, ids] of Object.entries(PLAYER_ACCOUNTS)) {
+    for (const steamId of ids) out.push({ discordName, steamId })
+  }
+  return out
+}
+
+/** All Steam32 IDs for a Discord username (case-insensitive). Empty if unknown. */
+export function getSteamIdsFor(discordName: string): string[] {
+  if (PLAYER_ACCOUNTS[discordName]) return PLAYER_ACCOUNTS[discordName]
+  const key = Object.keys(PLAYER_ACCOUNTS).find(k => k.toLowerCase() === discordName.toLowerCase())
+  return key ? PLAYER_ACCOUNTS[key] : []
+}
 
 // ─── Dota 2 nick cache ───────────────────────────────────────────────────
 
@@ -89,11 +128,12 @@ export async function fetchDotaNick(steamId: string | undefined, fallback: strin
  * bypassing the TTL cache. Called daily by PollingJob.
  */
 export async function refreshAllDotaNicks(): Promise<void> {
-  console.log(`[DotaNick] Starting full nick refresh for ${Object.keys(DISCORD_TO_STEAM).length} players...`)
+  const accounts = allSteamAccounts()
+  console.log(`[DotaNick] Starting full nick refresh for ${accounts.length} accounts...`)
   const cache = loadDotaNicksCache()
   let successCount = 0
   let failCount = 0
-  for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
+  for (const { discordName, steamId } of accounts) {
     try {
       const profile = await fetchPlayerProfile(steamId)
       if (!profile) {

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import https from 'https'
 import { Client, EmbedBuilder, TextChannel } from 'discord.js'
-import { DISCORD_TO_STEAM, fetchDotaNick, refreshAllDotaNicks } from './PlayerData'
+import { allSteamAccounts, fetchDotaNick, refreshAllDotaNicks } from './PlayerData'
 
 const STATE_FILE = './src/assets/data/polling-state.json'
 const OPENDOTA_API = 'https://api.opendota.com/api'
@@ -108,7 +108,7 @@ export class PollingJob {
     console.log('[PollingJob] Tracked players:', Object.keys(PollingJob.state.seenMatchIds).length)
     console.log('[PollingJob] State file path (resolved):', require('path').resolve(STATE_FILE))
     console.log('[PollingJob] State file exists:', fs.existsSync(STATE_FILE))
-    console.log('[PollingJob] DISCORD_TO_STEAM entries:', Object.keys(DISCORD_TO_STEAM).length)
+    console.log('[PollingJob] Steam accounts tracked:', allSteamAccounts().length)
 
     // Seed match IDs for any newly added players (without posting) after 10 s
     setTimeout(() => PollingJob.initializeNewPlayers(), 10_000)
@@ -147,7 +147,7 @@ export class PollingJob {
   private static async initializeNewPlayers(): Promise<void> {
     let changed = false
 
-    for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
+    for (const { discordName, steamId } of allSteamAccounts()) {
       if (PollingJob.state.seenMatchIds[steamId] !== undefined) continue
 
       try {
@@ -199,7 +199,7 @@ export class PollingJob {
 
       const newMatchesByPlayer: Array<{ name: string; matches: NewMatchInfo[] }> = []
 
-      for (const [discordName, steamId] of Object.entries(DISCORD_TO_STEAM)) {
+      for (const { discordName, steamId } of allSteamAccounts()) {
         try {
           const recent: RecentMatch[] = await httpsGet(
             `${OPENDOTA_API}/players/${steamId}/recentMatches`
