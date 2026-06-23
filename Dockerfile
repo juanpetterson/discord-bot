@@ -1,12 +1,18 @@
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
-RUN apk --no-cache add --virtual .builds-deps build-base python3
+# Build tooling for native modules (@discordjs/opus etc.). On Debian (glibc)
+# prebuilt binaries are usually available, so this is just a safe fallback.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install --production && npm rebuild bcrypt --build-from-source && npm cache clean --force 
+RUN npm install --omit=dev && npm cache clean --force
 
 COPY . .
 

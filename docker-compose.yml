@@ -14,6 +14,8 @@ services:
       - ./src/assets/data/quotes.json:/app/src/assets/data/quotes.json
       - ./src/assets/data/dota-nicks.json:/app/src/assets/data/dota-nicks.json
       - ./src/assets/data/polling-state.json:/app/src/assets/data/polling-state.json
+      - ./src/assets/data/join-sounds.json:/app/src/assets/data/join-sounds.json
+      - ./src/assets/data/players.json:/app/src/assets/data/players.json
     env_file:
       - .env
     command: ["npm", "run", "start"]

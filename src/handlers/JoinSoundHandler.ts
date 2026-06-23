@@ -141,9 +141,11 @@ export class JoinSoundHandler {
     return fallbackKey ? joinSounds[fallbackKey] : null
   }
 
-  static setJoinSoundForUser(userId: string, soundFileName: string) {
+  // Keyed by the Discord username/handle to match the existing entries.
+  // Lookup (getJoinSoundForUser) still resolves both username and numeric-id keys.
+  static setJoinSoundForUser(username: string, soundFileName: string) {
     const joinSounds = loadJoinSounds()
-    joinSounds[userId] = soundFileName
+    joinSounds[username] = soundFileName
     saveJoinSounds(joinSounds)
   }
 

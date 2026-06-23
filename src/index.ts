@@ -817,7 +817,7 @@ client.on('interactionCreate', async (interaction) => {
       return
     }
 
-    JoinSoundHandler.setJoinSoundForUser(targetUser.id, fileName)
+    JoinSoundHandler.setJoinSoundForUser(targetUser.username, fileName)
 
     const resolutionMessage = score >= 0.999
       ? `Join sound updated for <@${targetUser.id}>: \`${fileName}\`.`
