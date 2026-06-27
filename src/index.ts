@@ -207,6 +207,18 @@ client.on(Events.PresenceUpdate, async (oldPresence: Presence | null, newPresenc
   const oldActivities = oldPresence?.activities ?? [];
   const newActivities = newPresence.activities ?? [];
 
+  // TEMP: capture what Dota 2 exposes via Rich Presence so we can decide whether
+  // we can detect "in match" vs "in menu". Remove once the payload is known.
+  const dotaActivity = newActivities.find(a => a.name.toLowerCase() === 'dota 2');
+  if (dotaActivity) {
+    console.log('[PresenceDebug]', username, JSON.stringify({
+      details: dotaActivity.details,
+      state: dotaActivity.state,
+      timestamps: dotaActivity.timestamps,
+      assets: dotaActivity.assets,
+    }));
+  }
+
   const wasPlayingDota = oldActivities.some(act => act.name.toLowerCase() === 'dota 2');
   const isPlayingDota = newActivities.some(act => act.name.toLowerCase() === 'dota 2');
 
@@ -396,7 +408,23 @@ client.on('messageCreate', async (message: Message) => {
       return
     }
 
-    // Bets: !bet @player nós|nos|eles, !betwin <matchId>, !cancelbet, !bets, !leaderboard, !balance
+    // Betting rounds: !betstart @j1 @j2 (open), !betround (status), !betcancelround
+    if (messageContent.startsWith('!betstart')) {
+      await BetHandler.placeBetStart(message)
+      return
+    }
+
+    if (messageContent === '!betround') {
+      await BetHandler.roundStatus(message)
+      return
+    }
+
+    if (messageContent === '!betcancelround') {
+      await BetHandler.cancelRound(message)
+      return
+    }
+
+    // Bets: !bet @player nós|nos|eles (or !bet nós|eles on the open round), !betwin <matchId>, !cancelbet, !bets, !leaderboard, !balance
     if (messageContent.startsWith('!bet ') && !messageContent.startsWith('!betwin')) {
       const args = message.content.substring('!bet '.length)
       await BetHandler.placeBet(message, args)
@@ -547,7 +575,7 @@ client.on('messageCreate', async (message: Message) => {
           { name: '🎙️ Clip', value: '`!clip` — Save the last 60 seconds of voice chat as MP3 + individual tracks ZIP', inline: false },
           { name: '💬 Quotes', value: '`!addquote "text" author` — Add a quote\n`!quote` — Random quote\n`!quotes` — List recent quotes\n`!delquote <id>` — Delete a quote', inline: false },
           { name: '🔥 Fun', value: '`!roast @user [--all]` — Roast someone (career stats; `--all` roasts every account)\n`!roastlast [@user|nick] [--all]` — Deep roast of last match (items, build, position)\n`!poll Question | Opt1 | Opt2` — Create poll\n`!vote <number>` — Vote on poll\n`!endpoll` — End active poll', inline: false },
-          { name: '🎰 Bets', value: '`!bet @player nós` / `!bet @player eles` — Place a bet (nós=win, eles=lose)\n`!betwin <matchId>` — Resolve bets by match\n`!cancelbet @player` — Cancel your bet on that player\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
+          { name: '🎰 Bets', value: '`!betstart @j1 [@j2 ...]` — Open a betting round for players in the same game\n`!bet nós` / `!bet eles` — Bet on the open round (nós=win, eles=lose)\n`!betround` — Show the open round\n`!betcancelround` — Cancel the open round\n`!bet @player nós|eles` — Single-player bet (auto-resolves)\n`!cancelbet @player` — Cancel your bet on that player\n`!betwin <matchId>` — Manually resolve single-player bets\n`!bets` — Active bets\n`!leaderboard` — Points ranking\n`!balance` — Check your points', inline: false },
           { name: '🎮 x2/x4/x5', value: '`!x2` / `!x4` / `!x5` — Start or join a group manually\n`!autox2` / `!autox4` / `!autox5` — Auto-fill from voice channel (exclude @mentions)\n`!autox5 @mentions --exclude [\'lion\', \'ursa\']` — Auto-fill and block listed heroes from the random draft\n`!x2leave` / `!x4leave` / `!x5leave` — Leave group\n`!x2cancel` / `!x4cancel` / `!x5cancel` — Cancel group (creator)\n`!x2kick <nick>` / `!x4kick <nick>` / `!x5kick <nick>` — Kick member (creator)\n> Buttons: **🔀 Move to Channels** splits voice after teams are decided | **⚔️ Assign Heroes** assigns Dota 2 heroes', inline: false },
           { name: '🗣️ TTS', value: '`$text` — Google TTS\n`%text` — AI TTS\n`&text` — AWS TTS\n`!langs` — Supported languages', inline: false },
         )

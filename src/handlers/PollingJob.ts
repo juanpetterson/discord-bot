@@ -2,11 +2,13 @@ import fs from 'fs'
 import https from 'https'
 import { Client, EmbedBuilder, TextChannel } from 'discord.js'
 import { allSteamAccounts, fetchDotaNick, refreshAllDotaNicks } from './PlayerData'
+import { BetHandler } from './BetHandler'
 
 const STATE_FILE = './src/assets/data/polling-state.json'
 const OPENDOTA_API = 'https://api.opendota.com/api'
 const POLL_INTERVAL_MS = 30 * 60 * 1000       // 30 minutes
 const NICK_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000  // 24 hours
+const LIVE_BET_INTERVAL_MS = 3 * 60 * 1000    // 3 minutes
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -118,6 +120,9 @@ export class PollingJob {
 
     // Every 24 h: force-refresh all Dota nicknames
     setInterval(() => PollingJob.runNickRefresh(), NICK_REFRESH_INTERVAL_MS)
+
+    // Every 3 min: auto-resolve bets whose target's match has finished
+    setInterval(() => PollingJob.checkLiveBets(client), LIVE_BET_INTERVAL_MS)
 
     // If last nick refresh was > 24 h ago, do one right after startup
     if (Date.now() - PollingJob.state.lastNickRefresh > NICK_REFRESH_INTERVAL_MS) {
@@ -295,6 +300,30 @@ export class PollingJob {
       console.log(`[PollingJob] Posted match notification for ${newMatchesByPlayer.length} player(s)`)
     } catch (err) {
       console.error('[PollingJob] Unexpected error during match check:', err)
+    }
+  }
+
+  /**
+   * Auto-resolve active bets when a tracked player's match has finished.
+   * Runs frequently but does no network work when there are no active bets.
+   */
+  private static async checkLiveBets(client: Client): Promise<void> {
+    const channelId = PollingJob.state.resumeChannelId
+    if (!channelId) return
+
+    try {
+      let channel = client.channels.cache.get(channelId) as TextChannel | undefined
+      if (!channel) {
+        const fetched = await client.channels.fetch(channelId)
+        if (fetched && fetched.isTextBased()) channel = fetched as TextChannel
+      }
+      if (!channel) return
+
+      const postEmbed = (embed: EmbedBuilder) => channel!.send({ embeds: [embed] }).then(() => undefined)
+      await BetHandler.autoResolveActiveBets(postEmbed)
+      await BetHandler.autoResolveRound(postEmbed)
+    } catch (err) {
+      console.error('[PollingJob] Live bet auto-resolve failed:', err)
     }
   }
 

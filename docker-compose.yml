@@ -10,12 +10,11 @@ services:
     volumes:
       - ./src/assets/uploads:/app/src/assets/uploads
       - ./src/assets/gifs:/app/src/assets/gifs
-      - ./src/assets/data/bets.json:/app/src/assets/data/bets.json
-      - ./src/assets/data/quotes.json:/app/src/assets/data/quotes.json
-      - ./src/assets/data/dota-nicks.json:/app/src/assets/data/dota-nicks.json
-      - ./src/assets/data/polling-state.json:/app/src/assets/data/polling-state.json
-      - ./src/assets/data/join-sounds.json:/app/src/assets/data/join-sounds.json
-      - ./src/assets/data/players.json:/app/src/assets/data/players.json
+      # Mount the whole data folder so all JSON state (bets, quotes, players,
+      # join-sounds, polling-state, dota-nicks, etc.) persists across deploys.
+      # Avoids the "file mounted before it exists → Docker creates a directory"
+      # trap that silently broke individual-file mounts.
+      - ./src/assets/data:/app/src/assets/data
     env_file:
       - .env
     command: ["npm", "run", "start"]
